@@ -7,11 +7,11 @@ from skimage import io
 
 class ICLNUIMDataset(Dataset):
     '''
-    path example: 'path/to/your/ICL-NUIM R-GBD Dataset/living_room_traj0_frei_png'
-    adapted from c++ code in https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
+    Loads samples from the pre-rendered NUIM dataset: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
+    Adapted from c++ code in https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
     '''
 
-    # taken from https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
+    # intrinsic camera matrix taken from https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
     cam_K = {
         'fx': 481.2,
         'fy': -480.0,
@@ -20,6 +20,12 @@ class ICLNUIMDataset(Dataset):
     }
 
     def __init__(self, path, depth_to_image_plane=True, transform=None):
+        '''
+
+        :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
+        :param depth_to_image_plane: whether or not to convert to depth in the .depth file into image_plane depth, see: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
+        :param transform:
+        '''
         self.transform = transform
         self.depth_to_image_plane = depth_to_image_plane
         self.path = path
@@ -59,6 +65,7 @@ class ICLNUIMDataset(Dataset):
         return len(self.img)
 
     def toImagePlane(self, depth, x, y):
+        # taken from the c++ code implementation at https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html in file VaFRIC.cpp#getEuclidean2PlanarDepth
         x_plane = (x - ICLNUIMDataset.cam_K['cx']) / ICLNUIMDataset.cam_K['fx']
         y_plane = (y - ICLNUIMDataset.cam_K['cy']) / ICLNUIMDataset.cam_K['fy']
         return depth / np.sqrt(x_plane**2 + y_plane**2 + 1)
