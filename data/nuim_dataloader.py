@@ -27,7 +27,6 @@ class ICLNUIMDataset(Dataset):
         self.transform = transform
         self.depth_to_image_plane = depth_to_image_plane
         self.path = path
-        self.depth_cache = []
 
         self.img = sorted([f for f in os.listdir(path) if f.endswith('.png')])
         self.depth = sorted([f for f in os.listdir(path) if f.endswith('.depth')])
@@ -99,7 +98,4 @@ def test():
 
 if __name__ == "__main__":
     # execute only if run as a script
-
-    from joblib import Memory
-
     test()
