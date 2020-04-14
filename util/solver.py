@@ -19,6 +19,19 @@ def wrap_data(xb, yb, device):
 
     return xb, yb
 
+def default_sample_loader(sample):
+    return {
+        'x': sample['x'],
+        'y': sample['y']
+    }
+
+def accuracy(self, scores, y):
+    with torch.no_grad():
+        _, preds = torch.max(scores, 1) # select highest value as the predicted class
+        y_mask = y >= 0 # do not allow "-1" segmentation value
+        acc = np.mean((preds == y)[y_mask].data.cpu().numpy())  # check if prediction is correct + average of it for all N inputs
+        return acc
+
 class Solver(object):
     default_adam_args = {"lr": 1e-4,
                          "betas": (0.9, 0.999),
@@ -30,6 +43,8 @@ class Solver(object):
                  optim_args={},
                  extra_args={},
                  loss_func=torch.nn.CrossEntropyLoss(),
+                 sample_loader=default_sample_loader,
+                 acc_func=accuracy,
                  log_dir=None):
         """
 
@@ -39,6 +54,11 @@ class Solver(object):
         optim_args: see also default_adam_args: specify here valid dictionary of arguments for chosen optimizer
         extra_args: extra_args that should be used when logging to tensorboard (e.g. model hyperparameters)
         loss_func: loss function, e.g. Cross-Entropy-Loss
+        sample_loader: function on how to return input ('x') and target ('y') from a mini-batch sample.
+                       This way the solver can work for any data by just defining how to get input and target through the caller.
+                       The output of the function must satisfy the following format: { 'x': sample_input, 'y': sample_targets }
+                       (default: returns sample['x'] and sample['y'])
+        acc_func: how to calculate accuracy measure between scores and y. default: Accuracy for class prediction via CrossEntropyLoss
         log_dir: where to log to tensorboard
         """
         optim_args_merged = self.default_adam_args.copy()
@@ -46,6 +66,8 @@ class Solver(object):
         self.optim_args = optim_args_merged
         self.optim = optim
         self.loss_func = loss_func
+        self.acc_func = acc_func
+        self.sample_loader = sample_loader
 
         self.writer = SummaryWriter(log_dir)
         self.hparam_dict = {'loss function': type(self.loss_func).__name__,
@@ -68,14 +90,18 @@ class Solver(object):
         self.val_loss_history = []
 
     def forward_pass(self, model, sample, device):
-        xb = sample["image"]
-        yb = sample["label"]
 
-        xb, yb = wrap_data(xb, yb, device)
-        scores = model(xb)
+        sample = self.sample_loader(sample)
 
-        loss = self.loss_func(scores, yb)
-        acc = self.accuracy(scores, yb)
+        x = sample['x']
+        y = sample['y']
+
+        x, y = wrap_data(x, y, device)
+
+        scores = model(x)
+
+        loss = self.loss_func(scores, y)
+        acc = self.acc_func(scores, y)
 
         return loss, acc
 
@@ -135,6 +161,7 @@ class Solver(object):
         model.to(device)
 
         print('START TRAIN on device: {}'.format(device))
+
         #start = time()
         for epoch in range(num_epochs):  # for every epoch...
             model.train()  # TRAINING mode (for dropout, batchnorm, etc.)
@@ -226,10 +253,3 @@ class Solver(object):
         })
         self.writer.flush()
         print('FINISH.')
-
-    def accuracy(self, scores, y):
-        with torch.no_grad():
-            _, preds = torch.max(scores, 1) # select highest value as the predicted class
-            y_mask = y >= 0 # do not allow "-1" segmentation value
-            acc = np.mean((preds == y)[y_mask].data.cpu().numpy())  # check if prediction is correct + average of it for all N inputs
-            return acc

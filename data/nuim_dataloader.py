@@ -24,7 +24,7 @@ class ICLNUIMDataset(Dataset):
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
         :param depth_to_image_plane: whether or not to convert to depth in the .depth file into image_plane depth, see: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
-        :param transform:
+        :param transform: transform that should be applied to the input image AND the target depth
         '''
         self.transform = transform
         self.depth_to_image_plane = depth_to_image_plane
@@ -44,7 +44,7 @@ class ICLNUIMDataset(Dataset):
         # read depth file
         with open(os.path.join(self.path, self.depth[idx])) as f:
             depth = [float(i) for i in f.read().split(' ') if i.strip()] # read .depth file
-            depth = np.asarray(depth).reshape(image.shape[:2]) # convert to same format as image WxH
+            depth = np.asarray(depth, dtype=np.float32).reshape(image.shape[:2]) # convert to same format as image WxH
 
             # convert to image plane depth by taking into account the position in the WxH array as (x, y)
             if self.depth_to_image_plane:
@@ -53,11 +53,11 @@ class ICLNUIMDataset(Dataset):
         #TODO: read cam.txt file
 
         sample = {'image': image,
-                  'depth': depth,
-                  'cam': None}
+                  'depth': depth}
 
         if self.transform:
-            sample = self.transform(sample)
+            sample['image'] = self.transform(sample['image'])
+            sample['depth'] = self.transform(sample['depth'])
 
         return sample
 
