@@ -20,10 +20,10 @@ block_types = {
 # Taken from SynSin code   #
 ############################
 # Spectral norm for linear layer (Suggested in BigGAN, used in SynSin)
-def get_linear_layer(in_ch, out_ch, spectral_norm=True):
-    linear = nn.Linear(in_ch, out_ch, bias=False)
+def get_linear_layer(in_ch, out_ch, bias=False, spectral_norm=True):
+    linear = nn.Linear(in_ch, out_ch, bias=bias)
     if spectral_norm:
-        nn.utils.spectral_norm(linear)
+        linear = nn.utils.spectral_norm(linear)
     return linear
 
 # Spectral norm for Conv2D layer (Suggested in BigGAN, used in SynSin)
@@ -144,8 +144,8 @@ class LinearNoiseLayer(nn.Module):
         super().__init__()
         self.noise_sz = noise_sz
 
-        self.gain = get_linear_layer(noise_sz, output_sz)
-        self.bias = get_linear_layer(noise_sz, output_sz)
+        self.gain = get_linear_layer(noise_sz, output_sz, bias=False, spectral_norm=True)
+        self.bias = get_linear_layer(noise_sz, output_sz, bias=False, spectral_norm=True)
 
         self.bn = bn(output_sz)
 
@@ -173,7 +173,7 @@ class ResidualBlock(nn.Module):
     Based on ResNet_Block in blocks.py
     See Appendix B and fig. 14 in SynSin paper.
     '''
-    def __init__(self, in_ch, out_ch, block_type):
+    def __init__(self, in_ch, out_ch, block_type, noisy_bn=True):
         super().__init__()
 
         # variable_layer is the layer defining the type of the residual block.
@@ -181,20 +181,24 @@ class ResidualBlock(nn.Module):
         if block_type not in block_types.keys():
             raise "ResidualBlock: Wrong block type!"
 
+        self.BN1 = LinearNoiseLayer(output_sz=in_ch) if noisy_bn else nn.BatchNorm2d()
+
+        self.BN2 = LinearNoiseLayer(output_sz=out_ch) if noisy_bn else nn.BatchNorm2d()
+
         self.variable_layer = block_types[block_type]
 
         self.left_branch = nn.Sequential(
-            get_conv2D_layer(in_ch, out_ch, kernel_size=(1,1), padding=0, stride=1),
+            get_conv2D_layer(in_ch, out_ch, kernel_size=(1,1), padding=0, stride=1, spectral_norm=True),
             self.variable_layer
         )
 
         self.right_branch = nn.Sequential(
-            LinearNoiseLayer(output_sz=in_ch),
+            self.BN1,
             nn.ReLU(),
-            get_conv2D_layer(in_ch, out_ch, kernel_size=(3,3), padding=1, stride=1),
-            LinearNoiseLayer(output_sz=out_ch),
+            get_conv2D_layer(in_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=True),
+            self.BN2,
             nn.ReLU(),
-            get_conv2D_layer(out_ch, out_ch, kernel_size=(3,3), padding=1, stride=1),
+            get_conv2D_layer(out_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=True),
             self.variable_layer
         )
 

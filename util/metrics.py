@@ -1,6 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 
-from ssim import ssim
+from util.ssim import ssim
+from torch.nn.functional import mse_loss
 
 # The SSIM metric
 def ssim_metric(img1, img2, mask=None):
@@ -8,18 +9,8 @@ def ssim_metric(img1, img2, mask=None):
 
 
 # The PSNR metric
-def psnr(img1, img2, mask=None):
-    b = img1.size(0)
-    if not (mask is None):
-        b = img1.size(0)
-        mse_err = (img1 - img2).pow(2) * mask
-        mse_err = mse_err.view(b, -1).sum(dim=1) / (
-            3 * mask.view(b, -1).sum(dim=1).clamp(min=1)
-        )
-    else:
-        mse_err = (img1 - img2).pow(2).view(b, -1).mean(dim=1)
-
-    psnr = 10 * (1 / mse_err).log10()
+def psnr(img1, img2):
+    psnr = 10 * (1 / mse_loss(img1, img2)).log10()
     return psnr
 
 
