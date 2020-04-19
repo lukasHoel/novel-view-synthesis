@@ -2,3 +2,5 @@
 __pycache__
 .ipynb_checkpoints
 saved_models
+build
+.vscode
