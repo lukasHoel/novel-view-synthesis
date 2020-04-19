@@ -173,7 +173,7 @@ class ResidualBlock(nn.Module):
     Based on ResNet_Block in blocks.py
     See Appendix B and fig. 14 in SynSin paper.
     '''
-    def __init__(self, in_ch, out_ch, block_type, noisy_bn=True):
+    def __init__(self, in_ch, out_ch, block_type, noisy_bn=False):
         super().__init__()
 
         # variable_layer is the layer defining the type of the residual block.
@@ -181,24 +181,24 @@ class ResidualBlock(nn.Module):
         if block_type not in block_types.keys():
             raise "ResidualBlock: Wrong block type!"
 
-        self.BN1 = LinearNoiseLayer(output_sz=in_ch) if noisy_bn else nn.BatchNorm2d()
+        self.BN1 = LinearNoiseLayer(output_sz=in_ch) if noisy_bn else nn.BatchNorm2d(in_ch)
 
-        self.BN2 = LinearNoiseLayer(output_sz=out_ch) if noisy_bn else nn.BatchNorm2d()
+        self.BN2 = LinearNoiseLayer(output_sz=out_ch) if noisy_bn else nn.BatchNorm2d(out_ch)
 
         self.variable_layer = block_types[block_type]
 
         self.left_branch = nn.Sequential(
-            get_conv2D_layer(in_ch, out_ch, kernel_size=(1,1), padding=0, stride=1, spectral_norm=True),
+            get_conv2D_layer(in_ch, out_ch, kernel_size=(1,1), padding=0, stride=1, spectral_norm=False),
             self.variable_layer
         )
 
         self.right_branch = nn.Sequential(
             self.BN1,
             nn.ReLU(),
-            get_conv2D_layer(in_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=True),
+            get_conv2D_layer(in_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=False),
             self.BN2,
             nn.ReLU(),
-            get_conv2D_layer(out_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=True),
+            get_conv2D_layer(out_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=False),
             self.variable_layer
         )
 
