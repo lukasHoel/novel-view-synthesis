@@ -18,6 +18,7 @@ public:
     void renderInteractive();
     int init();
 
+    Model* m_model = nullptr;
 private:
 
     int m_buffer_width = DEF_WIDTH;
@@ -26,7 +27,6 @@ private:
 
     GLFWwindow* m_window = nullptr;
     Shader* m_shader = nullptr;
-    Model* m_model = nullptr;
 
     void render(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection);
 };

@@ -94,6 +94,21 @@ public:
         glActiveTexture(GL_TEXTURE0);
     }
 
+    // update the vertex buffer and index buffer on the gpu with the current values of the mesh
+    void updateData() {
+        glBindVertexArray(VAO);
+
+        // update vertices
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW); 
+
+        // update indices
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
+
+        glBindVertexArray(0);
+    }
+
 private:
     /*  Render data  */
     unsigned int VBO, EBO;
