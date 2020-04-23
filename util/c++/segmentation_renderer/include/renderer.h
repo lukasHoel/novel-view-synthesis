@@ -7,8 +7,8 @@
 #include "model.h"
 #include "camera.h"
 
-const unsigned int DEF_WIDTH = 800;
-const unsigned int DEF_HEIGHT = 600;
+const unsigned int DEF_WIDTH = 1280;
+const unsigned int DEF_HEIGHT = 1024;
 
 class Renderer {
 public:

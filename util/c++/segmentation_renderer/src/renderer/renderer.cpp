@@ -99,6 +99,28 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
 void Renderer::renderToImage(const glm::mat4& pose, const glm::mat4& projection, const std::string save_path){
     render(glm::mat4(), pose, projection);
 
+    // Note on the Matterport dataset:
+
+    /*
+        - The region_X.ply are still in world-coordinates, e.g. region0 is left and region6 is centered.
+        - Thus I can use the camera extrinsics/intrinsics also for the regions only
+        - This means, that I can use regions + vseg file (Alternative: use whole house mesh and parse fseg file instead of vseg)
+        - For each image (matterport_color_images.zip) we have a corresponding extrinsic/intrinsic file with same name
+            --> Use this for calculating the view and projection matrices
+            --> TODO: HOW?
+        - TODO: Find out which image corresponds to which region. It only makes sense to use the images for the corresponding region
+            --> Otherwise we would look at nothing because in that case the region is not present
+            --> Can I do it like this? Parse .house file and go like this: Image Name --> Panorama Index --> Region Index ?
+        - TODO: Write a main.cpp pipeline which loops over all images (selected images --> loop over folder of images) for a specific region
+            --> Color according to segmentation + transform object from input
+            --> Render from specific camera pose/intrinsic for this view
+            --> Save as image in output folder
+        - TODO (optional): Before the main.cpp pipeline starts, we show the region in an interactive renderer.
+            --> Allow the user to somehow interactively choose which object to move and how to move it
+            --> From this selection, extract a transformation matrix and use that as an input for the pipeline
+            --> (optional 2): Let the user create a trajectory (multiple transformation matrices) and use each of them
+    */
+
     //TODO get image from openGL and save...
 }
 
