@@ -41,12 +41,18 @@ Segmentation_Provider::Segmentation_Provider(string const &semseg_path,
 
 Segmentation_Provider::~Segmentation_Provider() = default;
 
+int Segmentation_Provider::getObjectId(int vertexIndex){
+    int segment = vertex_to_segment[vertexIndex];
+    int object_id = segment_to_object_id[segment];
+
+    return object_id;
+}
+
 void Segmentation_Provider::change_colors(Mesh &mesh){
     for(auto i=0; i<mesh.vertices.size(); i++){
 
         // look up the new color for this vertex
-        int segment = vertex_to_segment[i];
-        int object_id = segment_to_object_id[segment];
+        int object_id = getObjectId(i);
         glm::vec3 rgb = object_id_to_color[object_id];
 
         // assign new color

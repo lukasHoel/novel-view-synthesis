@@ -9,31 +9,15 @@ using json = nlohmann::json;
 #include <map>
 #include <glm/glm.hpp>
 
-// label_to_color or object_id_to_color??
-
-/*
-std::map <std::string, std::vector<int>> label_to_color { 
-  { "lamp", {255, 0, 255} }, 
-  { "pillow", {255, 255, 0} } 
-};
-
-void random_rgb(int rgb[]);
-void random_rgb(int rgb[])
-{
-  int i;
-  for(i=0;i<3;i++)
-  {
-    rgb[i]=rand()%256;
-  }
-}
-*/
-
 class Segmentation_Provider {
 
     public:
         Segmentation_Provider(string const &semseg_path, string const &vseg_path);
         ~Segmentation_Provider();
         void change_colors(Mesh &mesh);
+        int getObjectId(int vertexIndex);
+
+        // static const std::map<std::string, std::vector<int>> label_to_color;
 
     private:
         int n_objects;
@@ -52,3 +36,19 @@ class Segmentation_Provider {
             }
         }
 };
+
+// MIGHT NEED TO PARSE THIS ACCORDING TO MAPPING FILE IN THE GITHUB OF MATTERPORT3D
+/*
+const std::map<std::string, std::vector<int>> Segmentation_Provider::label_to_color = { 
+    { "void", {255, 0, 255} }, 
+    { "wall", {255, 0, 255} },
+    { "floor", {255, 0, 255} },
+    { "chair", {255, 0, 255} },
+    { "door", {255, 0, 255} },
+    { "table", {255, 0, 255} }, 
+    { "picture", {255, 0, 255} },
+    { "cabinet", {255, 0, 255} },
+    { "cushion", {255, 0, 255} },
+    { "window", {255, 0, 255} },
+};
+*/

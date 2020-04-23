@@ -1,8 +1,8 @@
 #include <iostream>
 
 #include "renderer.h"
-
 #include "segmentation_provider.h"
+#include "mesh_transformer.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -35,6 +35,18 @@ int main(int argc, char** argv){
             }
 
             std::cout << "Updated Mesh Colors according to object instance segmentation" << std::endl;
+
+            for(auto& mesh : renderer.m_model->meshes){
+                Mesh_Transformer transform(mesh, sp);
+                transform.splitMeshAtObject(16);
+                glm::mat4 t = { 1, 0, 0, 0,
+                                0, 1, 0, 0,
+                                0, 0, 1, 0,
+                                0.5, 0.5, 0.5, 1 };
+                transform.moveVerticesOfObject(16, t);
+            }
+
+            std::cout << "Splitted and transformed mesh: bed translated by (0.5, 0.5, 0.5)" << std::endl;
         }
 
         renderer.renderInteractive();
