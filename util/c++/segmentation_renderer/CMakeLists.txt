@@ -14,7 +14,11 @@ find_package(GLFW3 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Assimp REQUIRED)
 
-add_executable(${PROJECT_NAME} src/main.cpp src/renderer/renderer.cpp src/mp_parser/segmentation_provider.cpp src/mesh_transformer/mesh_transformer.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp
+ src/renderer/renderer.cpp
+ src/mp_parser/segmentation_provider.cpp
+ src/mp_parser/mp.cpp
+ src/mesh_transformer/mesh_transformer.cpp)
 
 target_include_directories(
     ${PROJECT_NAME} PRIVATE include

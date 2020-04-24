@@ -107,6 +107,11 @@ void Renderer::renderToImage(const glm::mat4& pose, const glm::mat4& projection,
         - This means, that I can use regions + vseg file (Alternative: use whole house mesh and parse fseg file instead of vseg)
         - For each image (matterport_color_images.zip) we have a corresponding extrinsic/intrinsic file with same name
             --> Use this for calculating the view and projection matrices
+            --> But these parameters are distorted, e.g. the intrinsic files contain arbitrary 3x3 matrix
+            --> This is solved in undistorted_camera_parameters.zip
+            --> The same values as in undistorted_camera_parameters.zip are also present in the .house file
+            --> Just use the extrinsic/intrinsic parameters from the .house file!
+            --> Note that the extrinsic parameters differ in the .house file and in the undistorted file. What is correct?
             --> TODO: HOW?
         - TODO: Find out which image corresponds to which region. It only makes sense to use the images for the corresponding region
             --> Otherwise we would look at nothing because in that case the region is not present
