@@ -1,5 +1,11 @@
 #include "renderer.h"
 #include "model.h"
+#include "util.h"
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
+
+#include <glm/gtc/type_ptr.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
@@ -16,13 +22,17 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-Renderer::Renderer(string const &path) {
+Renderer::Renderer(string const &pathToMesh, MP_Parser const &mp_parser, int region_index): 
+                    mp_parser(mp_parser), region_index(region_index) {
+    m_buffer_width = mp_parser.regions[region_index]->panoramas[0]->images[0]->width;
+    m_buffer_height = mp_parser.regions[region_index]->panoramas[0]->images[0]->height;
+    
     if(init()){
         // if init fails, then the return code is != 0 which is equal to this if statement
         throw std::runtime_error("Failed to init renderer");
     }
 
-    m_model = new Model(path);
+    m_model = new Model(pathToMesh);
     m_shader = new Shader("../shader/color3D.vs", "../shader/color3D.frag");
 }
 
@@ -96,37 +106,69 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
     m_model->draw(*m_shader);
 }
 
-void Renderer::renderToImage(const glm::mat4& pose, const glm::mat4& projection, const std::string save_path){
-    render(glm::mat4(), pose, projection);
+/*
+    - The region_X.ply are still in world-coordinates, e.g. region0 is left and region6 is centered.
+    - Thus I can use the camera extrinsics/intrinsics also for the regions only
+    - This means, that I can use regions + vseg file (Alternative: use whole house mesh and parse fseg file instead of vseg)
+    - For each image (matterport_color_images.zip) we have a corresponding extrinsic/intrinsic file with same name
+        --> Use this for calculating the view and projection matrices
+        --> But these parameters are distorted, e.g. the intrinsic files contain arbitrary 3x3 matrix
+        --> This is solved in undistorted_camera_parameters.zip
+        --> The same values as in undistorted_camera_parameters.zip are also present in the .house file
+        --> Just use the extrinsic/intrinsic parameters from the .house file!
+        --> Note that the extrinsic parameters differ in the .house file and in the undistorted file. What is correct?
+    - Find out which image corresponds to which region. It only makes sense to use the images for the corresponding region
+        --> Otherwise we would look at nothing because in that case the region is not present
+        --> Can I do it like this? Parse .house file and go like this: Image Name --> Panorama Index --> Region Index ? --> Yes!
+*/
+void Renderer::renderImages(const std::string save_path){
 
-    // Note on the Matterport dataset:
+    for(int i=0; i<mp_parser.regions[region_index]->panoramas.size(); i++){
+        for(MPImage* image : mp_parser.regions[region_index]->panoramas[i]->images){
 
-    /*
-        - The region_X.ply are still in world-coordinates, e.g. region0 is left and region6 is centered.
-        - Thus I can use the camera extrinsics/intrinsics also for the regions only
-        - This means, that I can use regions + vseg file (Alternative: use whole house mesh and parse fseg file instead of vseg)
-        - For each image (matterport_color_images.zip) we have a corresponding extrinsic/intrinsic file with same name
-            --> Use this for calculating the view and projection matrices
-            --> But these parameters are distorted, e.g. the intrinsic files contain arbitrary 3x3 matrix
-            --> This is solved in undistorted_camera_parameters.zip
-            --> The same values as in undistorted_camera_parameters.zip are also present in the .house file
-            --> Just use the extrinsic/intrinsic parameters from the .house file!
-            --> Note that the extrinsic parameters differ in the .house file and in the undistorted file. What is correct?
-            --> TODO: HOW?
-        - TODO: Find out which image corresponds to which region. It only makes sense to use the images for the corresponding region
-            --> Otherwise we would look at nothing because in that case the region is not present
-            --> Can I do it like this? Parse .house file and go like this: Image Name --> Panorama Index --> Region Index ?
-        - TODO: Write a main.cpp pipeline which loops over all images (selected images --> loop over folder of images) for a specific region
-            --> Color according to segmentation + transform object from input
-            --> Render from specific camera pose/intrinsic for this view
-            --> Save as image in output folder
-        - TODO (optional): Before the main.cpp pipeline starts, we show the region in an interactive renderer.
-            --> Allow the user to somehow interactively choose which object to move and how to move it
-            --> From this selection, extract a transformation matrix and use that as an input for the pipeline
-            --> (optional 2): Let the user create a trajectory (multiple transformation matrices) and use each of them
-    */
+            glm::mat4 extr = glm::transpose(glm::make_mat4(image->extrinsics));
+            glm::mat3 intr = glm::make_mat3(image->intrinsics);
+            glm::mat4 projection = camera_utils::perspective(intr, image->width, image->height, kNearPlane, kFarPlane);
 
-    //TODO get image from openGL and save...
+            // render image
+            render(glm::mat4(1.0f), extr, projection);
+
+            // read image into openCV matrix
+            cv::Mat colorImage;
+            readRGB(colorImage);
+
+            // save matrix as file
+            if ((save_path != "") && (!colorImage.empty())) {
+                std::stringstream filename;
+                filename << save_path << "/segmentation_" << image->color_filename;
+                cv::imwrite(filename.str(), colorImage);
+
+                std::cout << "Wrote segmentation of: " << image->color_filename << std::endl;
+            }
+
+            // show image in window
+            glfwSwapBuffers(m_window);
+
+        }
+    
+    }
+}
+
+void Renderer::readRGB(cv::Mat& image) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 4);
+    image = cv::Mat(m_buffer_height, m_buffer_width, CV_8UC3);
+    std::vector<float> data_buff(m_buffer_width * m_buffer_height * 3);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, m_buffer_width, m_buffer_height, GL_RGB, GL_FLOAT, data_buff.data());
+    for (int i = 0; i < m_buffer_height; ++i) {
+        for (int j = 0; j < m_buffer_width; ++j) {
+            for (int c = 0; c < 3; c++) {
+                image.at<cv::Vec3b>(m_buffer_height - i - 1, j)[2 - c] = 
+                    static_cast<int>(256 * data_buff[int(3 * i * m_buffer_width + 3 * j + c)]);
+            }
+        }
+    }
+    // cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
 }
 
 void Renderer::renderInteractive(){
@@ -146,11 +188,19 @@ void Renderer::renderInteractive(){
         
         // model/view/projection transformations
         // ------
+
+        // MPImage* startImage = mp_parser.regions[region_index]->panoramas[0]->images[0];
+        // std::cout << startImage->color_filename << std::endl;
+        // glm::mat4 view = glm::transpose(glm::make_mat4(startImage->extrinsics));
+        // glm::mat3 intr = glm::make_mat3(startImage->intrinsics);
+        // glm::mat4 projection = camera_utils::perspective(intr, startImage->width, startImage->height, kNearPlane, kFarPlane);
+        // glm::mat4 model = glm::mat4(1.0f);
+
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)DEF_WIDTH / (float)DEF_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        // model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
+        model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
 
         // render
         // ------
