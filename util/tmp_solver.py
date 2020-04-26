@@ -39,8 +39,8 @@ def matplotlib_imshow(img, one_channel=False):
             img = img.mean(dim=0)
         npimg = (img.cpu().numpy() * 255).astype(np.uint8) # Assuming [0,1] range for img
         # Check range of values in the output image
-        print(np.amax(npimg))
-        print(np.amin(npimg))
+        # print(np.amax(npimg))
+        # print(np.amin(npimg))
         if one_channel:
             plt.imshow(npimg, cmap="Greys")
         else:
@@ -174,7 +174,8 @@ class Solver(object):
             self.writer.flush()
 
             # Prepare prediction-target grid
-            img_grid = prepare_grid(test_preds, sample['y'])
+            sample = self.sample_loader(sample)
+            img_grid = prepare_grid(test_preds.cpu(), sample['y'])
             # Write to tensorboard
             self.writer.add_image('test_sample', img_grid)
             self.writer.flush()
@@ -244,7 +245,8 @@ class Solver(object):
             self.writer.add_scalar('Epoch/Accuracy/Train', mean_train_acc, epoch)
 
             # Prepare prediction-target grid
-            img_grid = prepare_grid(train_preds, sample['y'])
+            sample = self.sample_loader(sample)
+            img_grid = prepare_grid(train_preds.cpu(), sample['y'])
             # Write to tensorboard
             self.writer.add_image('train_sample', img_grid)
             self.writer.flush()
@@ -289,7 +291,8 @@ class Solver(object):
                 self.writer.flush()
 
                 # Prepare prediction-target grid
-                img_grid = prepare_grid(val_preds, sample['y'])
+                sample = self.sample_loader(sample)
+                img_grid = prepare_grid(val_preds.cpu(), sample['y'].cuda())
                 # Write to tensorboard
                 self.writer.add_image('val_sample', img_grid)
                 self.writer.flush()

@@ -1,4 +1,4 @@
-from residual_block import *
+from models.residual_block import *
 
 class RefineNet(nn.Module):
     '''
@@ -6,7 +6,7 @@ class RefineNet(nn.Module):
     Based on ResNetDecoder in architectures.py
     See Appendix B and fig. 15(b) in SynSin paper.
     '''
-    def __init__(self, res_block_dims=[], res_block_types=[], activate_out=nn.Sigmoid):
+    def __init__(self, res_block_dims=[], res_block_types=[], activate_out=nn.Sigmoid()):
         '''
         Let n-many ResNet blocks, res_block_dims include n+1 elements 
         to specify input and output channels for each block.

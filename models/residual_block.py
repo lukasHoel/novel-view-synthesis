@@ -205,5 +205,8 @@ class ResidualBlock(nn.Module):
             self.variable_layer
         )
 
+        # Remove redundant variable names shown in the output when network architecture is printed
+        del self.BN1, self.BN2, self.variable_layer
+
     def forward(self, x):
         return self.left_branch(x) + self.right_branch(x)

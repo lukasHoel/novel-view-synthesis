@@ -1,8 +1,8 @@
-from residual_block import *
+from models.residual_block import *
 
 class FeatureNet(nn.Module):
     '''
-    Spatial feature network (SFN) that consists of ResidualBlocks of type "id" only.
+    Spatial feature network (SFN)/Feature encoder that consists of ResidualBlocks of type "id" only.
     Based on ResNetEncoder in architectures.py
     See Appendix B and fig. 15(a) in SynSin paper.
     '''
