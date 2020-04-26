@@ -22,6 +22,9 @@ def get_splatter(
             points_per_pixel=points_per_pixel,
             #opts=opt,
         )
+    # TODO: think about adding new parameters from the adapted version of this class (due to removal of opt...)
+    # New parameters are: rad_pow, accumulation, accumulation_tau (see also paper equations 1 and 2)
+
     else:
         raise NotImplementedError()
 
@@ -45,6 +48,8 @@ class PtsManipulator(nn.Module):
             (xs, -ys, -torch.ones(xs.size()), torch.ones(xs.size())), 1
         ).view(1, 4, -1)
 
+        # TODO: What is xyzs?
+
         self.register_buffer("xyzs", xyzs)
 
     def project_pts(
@@ -52,7 +57,7 @@ class PtsManipulator(nn.Module):
     ):
         # PERFORM PROJECTION
         # Project the world points into the new view
-        projected_coors = self.xyzs * pts3D
+        projected_coors = self.xyzs * pts3D # TODO what is the output of this?
         projected_coors[:, -1, :] = 1
 
         # Transform into camera coordinate of the first view
@@ -73,7 +78,7 @@ class PtsManipulator(nn.Module):
         zs = xy_proj[:, 2:3, :]
         zs[mask] = EPS
 
-        sampler = torch.cat((xy_proj[:, 0:2, :] / -zs, xy_proj[:, 2:3, :]), 1)
+        sampler = torch.cat((xy_proj[:, 0:2, :] / -zs, xy_proj[:, 2:3, :]), 1) # TODO what is happening here?
         sampler[mask.repeat(1, 3, 1)] = -10
         # Flip the ys
         sampler = sampler * torch.Tensor([1, -1, -1]).unsqueeze(0).unsqueeze(
