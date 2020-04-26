@@ -12,15 +12,15 @@ def get_splatter(
     name, depth_values, opt=None, size=256, C=64, points_per_pixel=8
 ):
     if name == "xyblending":
-        from models.layers.z_buffer_layers import RasterizePointsXYsBlending
+        from projection.z_buffer_layers import RasterizePointsXYsBlending
 
         return RasterizePointsXYsBlending(
-            C,
-            learn_feature=opt.learn_default_feature,
-            radius=opt.radius,
+            C=C,
+            #learn_feature=opt.learn_default_feature,
+            #radius=opt.radius,
             size=size,
             points_per_pixel=points_per_pixel,
-            opts=opt,
+            #opts=opt,
         )
     else:
         raise NotImplementedError()
@@ -93,10 +93,17 @@ class PtsManipulator(nn.Module):
             pred_pts = pred_pts.view(bs, 1, -1)
             src = src.view(bs, c, -1)
 
+        # pred_pts.shape = (bs, 1, w*h) --> one depth value for every element in the image raster (w*h)
+        # src.shape = (bs, c, w*h) --> c features for every element in the image raster (w*h)
+
         pts3D = self.project_pts(
             pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
         )
         pointcloud = pts3D.permute(0, 2, 1).contiguous()
+
+        # pts3D.shape = (bs, w*h, 3) --> (x,y,z) coordinate for ever element in the image raster
+        # Because we have done re-projection, the i-th coordinate in the image raster must no longer be identical to (x,y)!
+
         result = self.splatter(pointcloud, src)
 
         return result
