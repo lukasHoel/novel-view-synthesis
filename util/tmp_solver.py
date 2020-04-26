@@ -37,14 +37,30 @@ def matplotlib_imshow(img, one_channel=False):
     with torch.no_grad():
         if one_channel:
             img = img.mean(dim=0)
-        img = img * 255     # unnormalize
-        npimg = img.cpu().numpy()
+        npimg = (img.cpu().numpy() * 255).astype(np.uint8) # Assuming [0,1] range for img
+        # Check range of values in the output image
         print(np.amax(npimg))
         print(np.amin(npimg))
         if one_channel:
             plt.imshow(npimg, cmap="Greys")
         else:
             plt.imshow(np.transpose(npimg, (1, 2, 0)))
+
+def prepare_grid(pred, y):
+    with torch.no_grad():
+        # Get an image from a given batch at random
+        idx_range = pred.shape[0]
+        rand_idx = np.random.randint(idx_range)
+        pred = pred[rand_idx]
+        target = y[rand_idx]
+
+        # Create grid of image
+        img_grid = torchvision.utils.make_grid([pred, target])
+
+        # Write images in img_grid
+        matplotlib_imshow(img_grid, one_channel=False)
+
+        return img_grid
 
 class Solver(object):
     default_adam_args = {"lr": 1e-4,
@@ -117,20 +133,7 @@ class Solver(object):
         loss = self.loss_func(scores, y)
         acc = self.acc_func(scores, y)
 
-        # NOTE: Temporary
-        pred = scores[0]
-        target = y[0]
-        # create grid of image
-        img_grid = torchvision.utils.make_grid([pred, target])
-
-        # show images
-        matplotlib_imshow(img_grid, one_channel=False)
-
-        # write to tensorboard
-        self.writer.add_image('im', img_grid)
-        # NOTE: Temporary
-
-        return loss, acc
+        return loss, acc, scores
 
     def test(self, model, test_loader, test_prefix='/', log_nth=0):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -145,8 +148,10 @@ class Solver(object):
         with torch.no_grad():
             test_losses = []
             test_accs = []
+            test_preds = None
+            sample = None
             for i, sample in enumerate(tqdm(test_loader)):
-                loss, test_acc = self.forward_pass(model, sample, device)
+                loss, test_acc, test_preds = self.forward_pass(model, sample, device)
                 loss = loss.data.cpu().numpy()
                 test_losses.append(loss)
                 test_accs.append(test_acc)
@@ -166,6 +171,12 @@ class Solver(object):
 
             self.writer.add_scalar('Test/' + test_prefix + 'Mean/Loss', mean_loss, 0)
             self.writer.add_scalar('Test/' + test_prefix + 'Mean/Accuracy', mean_acc, 0)
+            self.writer.flush()
+
+            # Prepare prediction-target grid
+            img_grid = prepare_grid(test_preds, sample['y'])
+            # Write to tensorboard
+            self.writer.add_image('test_sample', img_grid)
             self.writer.flush()
 
             print("[TEST] mean acc/loss: {acc}/{loss}".format(acc=mean_acc, loss=mean_loss))
@@ -194,10 +205,12 @@ class Solver(object):
             model.train()  # TRAINING mode (for dropout, batchnorm, etc.)
             train_losses = []
             train_accs = []
+            train_preds = None
+            sample = None
             for i, sample in enumerate(tqdm(train_loader)):  # for every minibatch in training set
                 # FORWARD PASS --> Loss + acc calculation
                 #print("Time until next forward pass (loading from dataloader + backward pass) took: {}".format(time() - start))
-                train_loss, train_acc = self.forward_pass(model, sample, device)
+                train_loss, train_acc, train_preds = self.forward_pass(model, sample, device)
                 #start = time()
 
                 # BACKWARD PASS --> Gradient-Descent update
@@ -230,6 +243,12 @@ class Solver(object):
             self.writer.add_scalar('Epoch/Loss/Train', mean_train_loss, epoch)
             self.writer.add_scalar('Epoch/Accuracy/Train', mean_train_acc, epoch)
 
+            # Prepare prediction-target grid
+            img_grid = prepare_grid(train_preds, sample['y'])
+            # Write to tensorboard
+            self.writer.add_image('train_sample', img_grid)
+            self.writer.flush()
+
             print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
                                                                                  max=num_epochs,
                                                                                  acc=mean_train_acc,
@@ -240,9 +259,11 @@ class Solver(object):
             with torch.no_grad():
                 val_losses = []
                 val_accs = []
+                val_preds = None
+                sample = None
                 for i, sample in enumerate(tqdm(val_loader)):
                     # FORWARD PASS --> Loss + acc calculation
-                    val_loss, val_acc = self.forward_pass(model, sample, device)
+                    val_loss, val_acc, val_preds = self.forward_pass(model, sample, device)
                     val_loss = val_loss.data.cpu().numpy()
                     val_losses.append(val_loss)
                     val_accs.append(val_acc)
@@ -265,6 +286,12 @@ class Solver(object):
 
                 self.writer.add_scalar('Epoch/Loss/Val', mean_val_loss, epoch)
                 self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
+                self.writer.flush()
+
+                # Prepare prediction-target grid
+                img_grid = prepare_grid(val_preds, sample['y'])
+                # Write to tensorboard
+                self.writer.add_image('val_sample', img_grid)
                 self.writer.flush()
 
                 print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
