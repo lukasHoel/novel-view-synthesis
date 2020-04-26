@@ -120,6 +120,31 @@ class ICLNUIMDataset(Dataset):
         return RT
 
     def __getitem__(self, idx):
+        """
+
+        :param idx: item to choose
+        :return: dictionary with following format:
+            {
+                'image': image,
+                'depth': depth,
+                'cam': cam
+            }
+            where
+              image is a WxHxC matrix of floats,
+              depth is a WxH matrix of floats,
+              cam is a dictionary:
+                {
+                    'RT1': RT1,
+                    'RT2': RT2,
+                    'K': ICLNUIMDataset.K
+                }
+                where
+                  RT1 is a 3x4 extrinsic matrix of the idx-th item,
+                  RT2 is a 3x4 extrinsic matrix of a random neighboring item or None (see self.sampleSecondCam)
+                  K is a 3x3 intrinsic matrix (constant over all items)
+
+
+        """
         image = self.load_image(idx)
         depth = self.load_depth(idx)
 
