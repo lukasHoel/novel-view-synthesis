@@ -12,7 +12,6 @@ import torch.nn.functional as F
 
 import models.gan.discriminators as discriminators
 
-
 # Defines the GAN loss which uses either LSGAN or the regular GAN.
 # When LSGAN is used, it is basically same as MSELoss,
 # but it abstracts away the need to create the target label tensor
@@ -24,7 +23,7 @@ class GANLoss(nn.Module):
         target_real_label=1.0,
         target_fake_label=0.0,
         tensor=torch.FloatTensor,
-        opt=None,
+        opt=None, #gets never used anywhere
     ):
         super(GANLoss, self).__init__()
         self.real_label = target_real_label
@@ -118,6 +117,7 @@ class GANLoss(nn.Module):
             return self.loss(input, target_is_real, for_discriminator)
 
 
+# This is from SynSin but is adapted from the methods of pix2pix_model.py
 class BaseDiscriminator(nn.Module):
     def __init__(self, opt, name):
         super().__init__()
@@ -125,7 +125,7 @@ class BaseDiscriminator(nn.Module):
         if name == "pix2pixHD":
             self.netD = discriminators.define_D(opt)
         self.criterionGAN = GANLoss(
-            opt.gan_mode, tensor=torch.FloatTensor, opt=opt
+            opt.gan_mode, tensor=torch.FloatTensor, opt=opt # this opt here is never used in GANLoss, but just keep it...
         )
         self.criterionFeat = torch.nn.L1Loss()
         self.opt = opt
@@ -233,20 +233,65 @@ class BaseDiscriminator(nn.Module):
 
         return restart, new_lrs
 
-
+# This is from SynSin and wraps the class from above.
+# This is a simple way to incorporate GAN Loss into a pipeline
+# Takes in "real_img", "generated_img" and does all the work with the pix2pix GAN stuff.
 class DiscriminatorLoss(nn.Module):
-    def __init__(self, opt):
+    def __init__(self,
+                 lr,
+                 gan_mode="hinge",
+                 no_ganFeat_loss=False,
+                 lambda_feat=0.1,
+                 num_D=2,
+                 ndf=64,
+                 output_nc=3,
+                 norm_D="spectralinstance",
+                 isTrain=True):
+        """
+
+        :param lr: learning rate
+            used in the update_learning_rate method
+        :param gan_mode: which type of gan loss, e.g. BCE, Hinge, Wasserstein, LS-GAN, ...
+            used in GANLoss
+        :param no_ganFeat_loss: do not use feature loss in Pix2Pix Discriminator (like Perceptual Loss but in the GAN-Discriminator)
+            used in BaseDiscriminator, MulitscaleDiscriminator, and NLayerDiscriminator
+        :param lambda_feat: weight scaling of that loss ^
+            used in BaseDiscriminator
+        :param num_D: how many discriminators to use in the MultiscaleDiscriminator from Pix2Pix
+            used in MultiscaleDiscriminator
+        :param ndf: number of filters (channel size) in each Conv2d in NLayerDiscriminator from Pix2Pix
+            used in NLayerDiscriminator
+        :param output_nc: number of output image channels
+            used in NLayerDiscriminator
+        :param norm_D: instance normalization or batch normalization as normalization layer in NLayerDiscriminator
+            used in NLayerDiscriminator
+        :param isTrain: this flag is used in the update_learning_rate method
+        """
         super().__init__()
-        self.opt = opt
+        # Define self.opt here completely from the argument list and pass it to the other Pix2Pix classes.
+        # This way we are independent of a global opt but do not need to rewrite everything from the Pix2Pix classes.
+        self.opt = DotDict()
+        self.opt.discriminator_losses = "pix2pixHD"  # this is only valid option right now, used in BaseDiscriminator class
+        self.opt.lr = lr
+        self.opt.gan_mode = gan_mode
+        self.opt.no_ganFeat_loss = no_ganFeat_loss
+        self.opt.lamda_feat = lambda_feat
+        self.opt.num_D = num_D
+        self.opt.ndf = ndf
+        self.opt.output_nc = output_nc
+        self.opt.norm_D = norm_D
+        self.opt.isTrain = isTrain
 
         # Get the losses
-        loss_name = opt.discriminator_losses
+        loss_name = self.opt.discriminator_losses
 
         self.netD = self.get_loss_from_name(loss_name)
 
+        self.losses = [self.netD] # can use this for self.losses?
+
     def get_optimizer(self):
         optimizerD = torch.optim.Adam(
-            list(self.netD.parameters()), lr=self.opt.lr * 2, betas=(0, 0.9)
+            list(self.netD.parameters()), lr=self.opt.lr * 2, betas=(0, 0.9) # todo why *2?
         )
         return optimizerD
 
@@ -258,6 +303,7 @@ class DiscriminatorLoss(nn.Module):
 
         return netD
 
+    # TODO synsin does not use this forward method, where does is come from?
     def forward(self, pred_img, gt_img):
         losses = [
             loss(pred_img, gt_img, mode="discriminator") for loss in self.losses
@@ -284,7 +330,18 @@ class DiscriminatorLoss(nn.Module):
     def run_discriminator_one_step(self, pred_img, gt_img):
         return self.netD(pred_img, gt_img, mode="discriminator")
 
+    # TODO: Is the update_learning_rate stuff needed? SynSin never calls it in the repo?
     def update_learning_rate(self, curr_epoch):
         restart, new_lrs = self.netD.update_learning_rate(curr_epoch)
 
         return restart, new_lrs
+
+# This is a quick fix to keep using the opt.foo stuff in the pix2pix modules without excessiv rewriting
+# This class is meant to store all the values and allows accessing via .dot notation, e.g. opt = DotDict(), opt.lr = 0.001
+class DotDict(dict):
+    pass
+
+if __name__ == "__main__":
+    d = DiscriminatorLoss(lr=0.001)
+    # if this can be instantiated, then I have successfully eliminated the need for any other parameters except the ones defined
+    print("Defined DiscriminatorLoss successfully")

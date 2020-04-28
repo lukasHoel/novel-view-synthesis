@@ -15,7 +15,7 @@ from torch.nn.utils import spectral_norm
 # Returns a function that creates a normalization function
 # that does not condition on semantic map
 # From SynSin->models->layers->normalilzation.py
-def get_D_norm_layer(opt, norm_type="instance"):
+def get_D_norm_layer(norm_type="instance"):
     # helper function to get # output channels of the previous layer
     def get_out_channel(layer):
         if hasattr(layer, "out_channels"):
@@ -125,7 +125,7 @@ class NLayerDiscriminator(BaseNetwork):
         nf = opt.ndf
         input_nc = self.compute_D_input_nc(opt)
 
-        norm_layer = get_D_norm_layer(opt, opt.norm_D)
+        norm_layer = get_D_norm_layer(opt.norm_D)
         sequence = [
             [
                 nn.Conv2d(input_nc, nf, kernel_size=kw, stride=2, padding=padw),
@@ -213,7 +213,7 @@ class MultiscaleDiscriminator(BaseNetwork):
             count_include_pad=False,
         )
 
-    def update_learning_rate(self, epoch):
+    def update_learning_rate(self, epoch): # todo how to do this with opt? niter and niter_decay not currently present
         if epoch > self.opt.niter:
             lrd = self.opt.lr / self.opt.niter_decay
             new_lr = self.old_lr - lrd
