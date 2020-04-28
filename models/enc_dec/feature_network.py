@@ -1,4 +1,4 @@
-from models.residual_block import *
+from models.enc_dec.residual_block import *
 
 class FeatureNet(nn.Module):
     '''
