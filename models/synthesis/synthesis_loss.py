@@ -6,16 +6,18 @@ class SynthesisLoss(nn.Module):
     Class for calculation of L1, content losses and PSNR, SSIM metrics at the same time.
     Losses to calculate should be specified.
     """
-    def __init__(self, opt):
+    def __init__(self, losses=['1.0_l1', '10.0_content']):
+        """
+        :param losses: 
+            loss specification, str of the form: 'lambda_loss'
+            lambda is used to weight different losses
+            l1 and content/perceptual losses are summed if both are specified
+            used in the forward method
+        """
+
         super().__init__()
-        self.opt = opt
 
-        # Loss types passed by --losses flag are in the format: 'lambda_loss', 
-        # e.g. '1.0_l1' or '10.0_content' 
-        # L1 and content/perceptual losses are summed if both are specified
-        # Lambda is used to weight different losses
-
-        lambdas, loss_names = zip(*[loss_name.split("_") for loss_name in opt.losses]) # Parse lambda and loss_names from str
+        lambdas, loss_names = zip(*[loss_name.split("_") for loss_name in losses]) # Parse lambda and loss_names from str
         print("Loss names:", loss_names)
         print("Weight of each loss:", lambdas)
         lambdas = [float(l) for l in lambdas] # [str] -> [float]
@@ -31,7 +33,7 @@ class SynthesisLoss(nn.Module):
         if name == "l1":
             loss = L1LossWrapper()
         elif name == "content":
-            loss = PerceptualLoss(self.opt)
+            loss = PerceptualLoss()
         elif name == "PSNR":
             loss = PSNR()
         elif name == "SSIM":
@@ -45,10 +47,12 @@ class SynthesisLoss(nn.Module):
         For loss or metric function provided, evaluate the function of prediction and target.
         All results of individual functions along with the total loss returned in a dictionary.
         PSNR and SSIM are not added to total loss.
+        
+        :param pred_img: NVS image outputted from the generator
+            used for loss calculation/metric evaluation
+        :param gt_img: GT image for the novel view
+            used for loss calculation/metric evaluation
         """
-        # TODO: Check inputs: 
-        # pred_img is the NVS image: input_img = batch["images"][0] @z_buffermodel.py: ZbufferModelPts.forward
-        # What is ground truth specifically? output_img = batch["images"][-1] @z_buffermodel.py: ZbufferModelPts.forward
 
         # Initialize output dict
         loss_dir = {"Total Loss": 0}
