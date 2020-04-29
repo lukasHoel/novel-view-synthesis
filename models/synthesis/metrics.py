@@ -136,14 +136,6 @@ class PSNR(nn.Module):
     Peak Signal-to-Noise Ratio (PSNR) is an expression for the ratio between the maximum possible value (power) 
     of a signal and the power of distorting noise that affects the quality of its representation.
     """
-    # TODO: To be removed
-    def _forward(self, pred_img, gt_img):
-        bs = pred_img.size(0)
-        mse_err = (pred_img - gt_img).pow(2).sum(dim=1).view(bs, -1).mean(dim=1)
-
-        psnr = 10 * (1 / mse_err).log10()
-        return {"psnr": psnr.mean()}
-
     def forward(self, pred_img, gt_img):
         mse = F.mse_loss(pred_img, gt_img)
         psnr = 10 * (1 / mse).log10()
