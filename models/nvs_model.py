@@ -1,5 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
-
 import torch
 import torch.nn as nn
 
@@ -7,11 +5,10 @@ from models.enc_dec.feature_network import FeatureNet
 from models.enc_dec.depth_network import Unet
 from projection.z_buffer_manipulator import PtsManipulator
 from models.enc_dec.refinement_network import RefineNet
+from models.synthesis.synthesis_loss import SynthesisLoss
 
-from models.losses.synthesis import SynthesisLoss
 
-
-class NovelViewModel(nn.Module):
+class NovelViewSynthesisModel(nn.Module):
     def __init__(self, opt): # todo opt
         super().__init__()
 
