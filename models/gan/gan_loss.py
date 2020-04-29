@@ -246,7 +246,8 @@ class DiscriminatorLoss(nn.Module):
                  ndf=64,
                  output_nc=3,
                  norm_D="spectralinstance",
-                 isTrain=True):
+                 isTrain=True,
+                 init=True):
         """
 
         :param lr: learning rate
@@ -266,6 +267,7 @@ class DiscriminatorLoss(nn.Module):
         :param norm_D: instance normalization or batch normalization as normalization layer in NLayerDiscriminator
             used in NLayerDiscriminator
         :param isTrain: this flag is used in the update_learning_rate method
+        :param init: if weights should be initialized in all subclasses
         """
         super().__init__()
         # Define self.opt here completely from the argument list and pass it to the other Pix2Pix classes.
@@ -288,6 +290,12 @@ class DiscriminatorLoss(nn.Module):
         self.netD = self.get_loss_from_name(loss_name)
 
         self.losses = [self.netD] # can use this for self.losses?
+
+        # RECURSIVE WEIGHT INITIALIZATION (all classes in pix2pix have this)
+        if init:
+            for m in self.children():
+                if hasattr(m, "init_weights"):
+                    m.init_weights(init)
 
     def get_optimizer(self):
         optimizerD = torch.optim.Adam(

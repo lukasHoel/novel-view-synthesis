@@ -31,12 +31,12 @@ class ICLNUIMDataset(Dataset):
     # regex to read lines from the camera .txt file
     cam_pattern = "(?P<id>.*\w).*= \[(?P<x>.*), (?P<y>.*), (?P<z>.*)\].*"
 
-    def __init__(self, path, depth_to_image_plane=True, sampleSecondCam=True, transform=None):
+    def __init__(self, path, depth_to_image_plane=True, sampleOutput=True, transform=None):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
         :param depth_to_image_plane: whether or not to convert to depth in the .depth file into image_plane depth, see: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
-        :param sampleSecondCam: whether or not to uniformly sample a second extrinsic camera pose (R|T) in the neighborhood of each accessed item.
+        :param sampleOutput: whether or not to uniformly sample a second image + extrinsic camera pose (R|T) in the neighborhood of each accessed item.
                 neighborhood is currently defined as: select uniformly at random any camera in the range [index-30, index+30) where index is the accessed item index.
                 For example: If the 500. item is accessed, the second camera pose (R|T) will be from any of the poses of the items 470-530 (excluding 500).
         :param transform: transform that should be applied to the input image AND the target depth
@@ -51,7 +51,7 @@ class ICLNUIMDataset(Dataset):
 
         self.size = len(self.img)
 
-        self.sampleSecondCam = sampleSecondCam
+        self.sampleOutput = sampleOutput
 
     def load_image(self, idx):
         return io.imread(os.path.join(self.path, self.img[idx]))
@@ -127,7 +127,8 @@ class ICLNUIMDataset(Dataset):
             {
                 'image': image,
                 'depth': depth,
-                'cam': cam
+                'cam': cam,
+                'output': output
             }
             where
               image is a WxHxC matrix of floats,
@@ -140,8 +141,17 @@ class ICLNUIMDataset(Dataset):
                 }
                 where
                   RT1 is a 3x4 extrinsic matrix of the idx-th item,
-                  RT2 is a 3x4 extrinsic matrix of a random neighboring item or None (see self.sampleSecondCam)
-                  K is a 3x3 intrinsic matrix (constant over all items)
+                  RT2 is a 3x4 extrinsic matrix of a random neighboring item or None (see self.sampleOutput)
+                  K is a 3x3 intrinsic matrix (constant over all items),
+              output is a dictionary or None (see self.sampleOutput):
+                {
+                  'image': output_image,
+                  'idx': output_idx
+                }
+                where
+                  image is a random neighboring image
+                  idx is the index of the neighboring image (and of cam['RT2'])
+
 
 
         """
@@ -149,36 +159,46 @@ class ICLNUIMDataset(Dataset):
         depth = self.load_depth(idx)
 
         RT1 = self.load_cam(idx)
-        # TODO: read cam.txt file
         cam = {
             'RT1': RT1,
             'K': ICLNUIMDataset.K
         }
 
-        if self.sampleSecondCam:
-
+        output = None
+        if self.sampleOutput:
             # sample second idx in [idx-30, idx+30) interval
             low = idx - 30 if idx >= 30 else 0
             high = idx + 30 if idx <= self.size - 30 else self.size
-            second_idx = np.random.randint(low, high, 1)[0] # high is exclusive
+            output_idx = np.random.randint(low, high, 1)[0] # high is exclusive
 
             # never return the same idx, default handling: just use +1 or -1 idx
-            if second_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
-                second_idx = idx+1 if idx < self.size-1 else idx-1
+            if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
+                output_idx = idx+1 if idx < self.size-1 else idx-1
+
+            # load image of new index
+            output_image = self.load_image(output_idx)
 
             # load cam of new index
-            RT2 = self.load_cam(second_idx)
+            RT2 = self.load_cam(output_idx)
             cam['RT2'] = RT2
+
+            output = {
+                'image': output_image,
+                'idx': output_idx
+            }
 
         sample = {
             'image': image,
             'depth': depth,
-            'cam': cam
+            'cam': cam,
+            'output': output
         }
 
         if self.transform:
             sample['image'] = self.transform(sample['image'])
             sample['depth'] = self.transform(sample['depth'])
+            if self.sampleOutput:
+                sample['output']['image'] = self.transform(sample['output']['image'])
 
         return sample
 
@@ -193,8 +213,10 @@ class ICLNUIMDataset(Dataset):
 
 
 def test():
-    #dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop", depth_to_image_plane=True, sampleSecondCam=True);
-    dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleSecondCam=True);
+    dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop",
+                             depth_to_image_plane=True,
+                             sampleOutput=True)
+    #dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleOutput=True);
 
     print("Length of dataset: {}".format(len(dataset)))
 
@@ -211,12 +233,17 @@ def test():
     fig.suptitle("Sample " + str(i), fontsize=16)
     img = item['image']
     depth = item['depth']
-    fig.add_subplot(1, 2, 1)
+    out_img = item['output']['image']
+    out_idx = item['output']['idx']
+    fig.add_subplot(1, 3, 1)
     plt.title("Image")
     plt.imshow(img)
-    fig.add_subplot(1, 2, 2)
+    fig.add_subplot(1, 3, 2)
     plt.title("Depth Map")
     plt.imshow(depth, cmap='gray')
+    fig.add_subplot(1, 3, 3)
+    plt.title("Output Image " + str(out_idx))
+    plt.imshow(out_img)
 
     plt.show()
 

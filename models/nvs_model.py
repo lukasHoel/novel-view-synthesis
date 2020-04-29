@@ -5,64 +5,60 @@ from models.enc_dec.feature_network import FeatureNet
 from models.enc_dec.depth_network import Unet
 from projection.z_buffer_manipulator import PtsManipulator
 from models.enc_dec.refinement_network import RefineNet
-from models.synthesis.synthesis_loss import SynthesisLoss
-
 
 class NovelViewSynthesisModel(nn.Module):
-    def __init__(self, opt): # todo opt
+    def __init__(self,
+                 W,
+                 max_z=0,
+                 min_z=0,
+                 enc_dims=[3, 8, 16, 32],
+                 dec_dims=[32, 64, 32, 16, 3],
+                 use_rgb_features=False,
+                 use_gt_depth=False,
+                 use_inverse_depth=False,
+                 normalize_images=False): # todo W=imageSize for PtsManipulator?
         super().__init__()
 
-        self.opt = opt
+        # PARAMETERS
+        self.W = W
+        self.max_z = max_z
+        self.min_z = min_z
+        self.enc_dims = enc_dims
+        self.dec_dims = dec_dims
 
-        feature_channels = 16 # global constant for all components: how big is the feature_dimension per pixel?
+        # CONTROLS
+        self.use_rgb_features = use_rgb_features
+        self.use_gt_depth = use_gt_depth
+        self.use_inverse_depth = use_inverse_depth
+        self.normalize_images = normalize_images
 
         # ENCODER
         # Encode features to a given resolution
-        #self.encoder = get_encoder(opt)
-
-        feat_block_dims_opts = {
-            "code": ([3, 32, 32, 32, 64, 64, 64, 64, 64], ["id"] * 8),
-            "paper": ([3, 16, 16, 16, 32, 32, 32, 32, 64], ["id"] * 8),
-            "exp0": ([3, 64], ["id"] * 2),
-            "exp1": ([3, 16, 32, 64], ["id"] * 4),
-            "exp_pipeline0": ([3, feature_channels//4, feature_channels//2, feature_channels], ["id"] * 4),
-        }
-
-        self.encoder = FeatureNet(res_block_dims=feat_block_dims_opts["exp_pipeline0"][0],
-                                  res_block_types=feat_block_dims_opts["exp_pipeline0"][1])
+        self.encoder = FeatureNet(res_block_dims=self.enc_dims,
+                                  res_block_types=["id"]*len(self.enc_dims))
 
         # POINT CLOUD TRANSFORMER
         # REGRESS 3D POINTS
         self.pts_regressor = Unet(num_filters=4, channels_in=3, channels_out=1)
 
         # TODO is this the class that takes care of ambiguous depth after reprojection?
+        '''
         if "modifier" in self.opt.depth_predictor_type:
             self.modifier = Unet(channels_in=64, channels_out=64, opt=opt)
+        '''
 
         # 3D Points transformer
         if self.opt.use_rgb_features:
-            self.pts_transformer = PtsManipulator(opt.W, C=3, opt=opt)
+            self.pts_transformer = PtsManipulator(opt.W, C=3, opt=opt) #todo opt
         else:
-            self.pts_transformer = PtsManipulator(opt.W, C=feature_channels, opt=opt)
+            self.pts_transformer = PtsManipulator(opt.W, C=feature_channels, opt=opt) #todo opt
 
         # REFINEMENT NETWORK
-        #self.projector = get_decoder(opt)
-
-        ref_block_dims_opts = {
-            "code": ([64, 64, 128, 256, 256, 128, 128, 128, 3], ["id", "avg", "avg", "id", "ups", "ups", "id", "id"]),
-            "paper": ([64, 32, 128, 128, 64, 64, 64, 64, 3], ["id", "avg", "avg", "id", "ups", "ups", "id", "id"]),
-            "exp0": ([64, 3], ["id"]),
-            "exp_pipeline0": ([feature_channels, feature_channels*2, feature_channels, feature_channels//2, 3], ["id"]*4)
-        }
-
-        self.projector = RefineNet(res_block_dims=ref_block_dims_opts["exp_pipeline0"][0],
-                                   res_block_types=ref_block_dims_opts["exp_pipeline0"][1])
-
-        # LOSS FUNCTION
-        # Module to abstract away the loss function complexity
-        self.loss_function = SynthesisLoss(opt=opt)
+        self.projector = RefineNet(res_block_dims=self.dec_dims,
+                                   res_block_types=["id"] * (len(self.dec_dims) - 1))
 
         # TODO WHERE IS THIS NEEDED?
+        '''
         self.min_tensor = self.register_buffer("min_z", torch.Tensor([0.1]))
         self.max_tensor = self.register_buffer(
             "max_z", torch.Tensor([self.opt.max_z])
@@ -71,97 +67,80 @@ class NovelViewSynthesisModel(nn.Module):
             "discretized_zs",
             torch.linspace(self.opt.min_z, self.opt.max_z, self.opt.voxel_size),
         )
+        '''
 
-    def forward(self, batch):
-        """ Forward pass of a view synthesis model with a voxel latent field.
-        """
-        # Input values
-        input_img = batch["images"][0]
-        output_img = batch["images"][-1]
+    def forward(self,
+                input_img,
+                K,
+                K_inv,
+                input_RT,
+                input_RT_inv,
+                output_RT,
+                output_RT_inv,
+                gt_img=None,
+                depth_img=None):
 
-        if "depths" in batch.keys():
-            depth_img = batch["depths"][0]
-
-        # Camera parameters
-        K = batch["cameras"][0]["K"]
-        K_inv = batch["cameras"][0]["Kinv"]
-
-        input_RT = batch["cameras"][0]["P"]
-        input_RTinv = batch["cameras"][0]["Pinv"]
-        output_RT = batch["cameras"][-1]["P"]
-        output_RTinv = batch["cameras"][-1]["Pinv"]
-
-        if torch.cuda.is_available():
-            input_img = input_img.cuda()
-            output_img = output_img.cuda()
-            if "depths" in batch.keys():
-                depth_img = depth_img.cuda()
-
-            K = K.cuda()
-            K_inv = K_inv.cuda()
-
-            input_RT = input_RT.cuda()
-            input_RTinv = input_RTinv.cuda()
-            output_RT = output_RT.cuda()
-            output_RTinv = output_RTinv.cuda()
-
-        if self.opt.use_rgb_features:
-            fs = input_img
+        # ENCODE IMAGE
+        if self.use_rgb_features:
+            img_features = input_img
         else:
-            fs = self.encoder(input_img)
+            img_features = self.encoder(input_img)
 
-        # Regressed points
-        if not (self.opt.use_gt_depth):
-            if not('use_inverse_depth' in self.opt) or not(self.opt.use_inverse_depth):
-                regressed_pts = (
-                    nn.Sigmoid()(self.pts_regressor(input_img))
-                    * (self.opt.max_z - self.opt.min_z)
-                    + self.opt.min_z
-                )
+        # GET DEPTH
+        if not self.use_gt_depth:
+            # predict depth
+            regressed_pts = nn.Sigmoid()(self.pts_regressor(input_img))
 
+            # normalize depth
+            if not self.use_inverse_depth:
+                # Normalize in [min_z, max_z] range
+                regressed_pts = regressed_pts * (self.max_z - self.min_z) + self.min_z
             else:
                 # Use the inverse for datasets with landscapes, where there
                 # is a long tail on the depth distribution
-                depth = self.pts_regressor(input_img)
-                regressed_pts = 1. / (nn.Sigmoid()(depth) * 10 + 0.01)
+                regressed_pts = 1. / regressed_pts * 10 + 0.01 # todo why these values?
         else:
+            if depth_img is None:
+                raise ValueError("depth_img must not be None when using gt_depth")
             regressed_pts = depth_img
 
-        gen_fs = self.pts_transformer.forward_justpts(
-            fs,
+        # APPLY TRANSFORMATION and REPROJECT
+        transformed_img_features = self.pts_transformer.forward_justpts(
+            img_features,
             regressed_pts,
             K,
             K_inv,
             input_RT,
-            input_RTinv,
+            input_RT_inv,
             output_RT,
-            output_RTinv,
+            output_RT_inv,
         )
 
+        # TODO is this the class that takes care of ambiguous depth after reprojection?
+        '''
         if "modifier" in self.opt.depth_predictor_type:
-            gen_fs = self.modifier(gen_fs)
+            transformed_img_features = self.modifier(transformed_img_features)
+        '''
 
-        gen_img = self.projector(gen_fs)
+        # DECODE IMAGE
+        transformed_img = self.projector(transformed_img_features)
 
-        # And the loss
-        loss = self.loss_function(gen_img, output_img)
+        # NORMALIZE IMAGES
+        # TODO Where is this used?
+        if self.normalize_images:
+            input_img = 0.5 * input_img + 0.5
+            gt_img = 0.5 * gt_img + 0.5
+            transformed_img = 0.5 * transformed_img + 0.5
 
-        if self.opt.train_depth:
-            depth_loss = nn.L1Loss()(regressed_pts, depth_img)
-            loss["Total Loss"] += depth_loss
-            loss["depth_loss"] = depth_loss
+        return {
+            "InputImg": input_img,
+            "OutputImg": gt_img,
+            "PredImg": transformed_img,
+            "PredDepth": regressed_pts,
+        }
 
-        return (
-            loss,
-            {
-                "InputImg": input_img,
-                "OutputImg": output_img,
-                "PredImg": gen_img,
-                "PredDepth": regressed_pts,
-            },
-        )
-
-    # TODO WHERE IS THIS USED?
+    # TODO WHERE IS THIS USED? At inference time for multiple image generations?
+    '''
     def forward_angle(self, batch, RTs, return_depth=False):
         # Input values
         input_img = batch["images"][0]
@@ -207,3 +186,4 @@ class NovelViewSynthesisModel(nn.Module):
             return gen_imgs, regressed_pts
 
         return gen_imgs
+    '''
