@@ -5,6 +5,12 @@ from torchvision.models import vgg19
 class L1LossWrapper(nn.Module):
     """Wrapper of the L1Loss so that the format matches what is expected"""
     def forward(self, pred_img, gt_img):
+        """
+        :param pred_img: NVS image outputted from the generator
+            used for loss calculation/metric evaluation
+        :param gt_img: GT image for the novel view
+            used for loss calculation/metric evaluation
+        """
         err = F.l1_loss(pred_img, gt_img)
         return {"L1": err, "Total Loss": err}
 
@@ -53,13 +59,19 @@ class PerceptualLoss(nn.Module):
     Adapted from SPADE's implementation
     (https://github.com/NVlabs/SPADE/blob/master/models/networks/loss.py)
     """
-    def __init__(self, opt):
+    def __init__(self):
         super().__init__()
         self.model = VGG19(requires_grad=False) # Freeze the network
         self.criterion = nn.L1Loss()
         self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0] # Weights used for the contribution of the output of each slice to the total loss 
 
     def forward(self, pred_img, gt_img):
+        """
+        :param pred_img: NVS image outputted from the generator
+            used for loss calculation/metric evaluation
+        :param gt_img: GT image for the novel view
+            used for loss calculation/metric evaluation
+        """
         gt_fs = self.model(gt_img)
         pred_fs = self.model(pred_img)
 
