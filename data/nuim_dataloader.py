@@ -1,7 +1,9 @@
 import numpy as np
 import os
+import torch
 from torch.utils.data import Dataset
 from skimage import io
+from ...util.camera_transformations import *
 
 import re
 
@@ -31,7 +33,7 @@ class ICLNUIMDataset(Dataset):
     # regex to read lines from the camera .txt file
     cam_pattern = "(?P<id>.*\w).*= \[(?P<x>.*), (?P<y>.*), (?P<z>.*)\].*"
 
-    def __init__(self, path, depth_to_image_plane=True, sampleOutput=True, transform=None):
+    def __init__(self, path, depth_to_image_plane=True, sampleOutput=True, transform=None, cam_transforms=None):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
@@ -42,6 +44,7 @@ class ICLNUIMDataset(Dataset):
         :param transform: transform that should be applied to the input image AND the target depth
         '''
         self.transform = transform
+        self.cam_transforms = cam_transforms
         self.depth_to_image_plane = depth_to_image_plane
         self.path = path
 
@@ -186,6 +189,13 @@ class ICLNUIMDataset(Dataset):
                 'image': output_image,
                 'idx': output_idx
             }
+
+        if self.cam_transforms:
+            for elem in cam:
+                cam[elem] = torch.from_numpy(cam[elem])
+            cam['K'], cam['Kinv'] = transform_matrices(cam['K'], isK=True)
+            cam['RT1'], cam['RT1inv'] = transform_matrices(cam['RT1'])
+            cam['RT2'], cam['RT2inv'] = transform_matrices(cam['RT2'])
 
         sample = {
             'image': image,

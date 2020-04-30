@@ -37,6 +37,32 @@ def invert_K(K):
     return K_inv
 
 
+def transform_matrices(mat, isK = False):
+    """
+    Transforms K or RT matrices to 4x4 homogeneous matrices and calculates their inverse
+    :param matrix of shape 3x3 or 3x4
+    :return: matrix of shape 4x4, inverse matrix of shape 4x4
+    """
+    ones = torch.eye(4)
+    if isK:
+        K = torch.from_numpy(mat)
+        Kinv = invert_K(K.unsqueeze(0))
+        ones[0:3, 0:3] = Kinv
+        Kinv = ones
+        ones = torch.eye(4)
+        ones[0:3, 0:3] = K
+        K = ones
+        return K, Kinv
+    else:
+        RT = torch.from_numpy(mat)
+        RTinv = invert_RT(RT.unsqueeze(0))
+        ones[0:3, 0:4] = RTinv
+        RTinv = ones
+        ones = torch.eye(4)
+        ones[0:3, 0:4] = RT
+        RT = ones
+        return RT, RTinv
+
 def get_camera_matrices(position, rotation):
 
     Pinv = np.eye(4)
