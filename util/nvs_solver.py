@@ -6,11 +6,12 @@ Author: Lukas Hoellein
 
 import numpy as np
 
-from models.synthesis.synthesis_loss import SynthesisLoss
+from models.synthesis.synt_loss_metric import SynthesisLoss, QualityMetrics
 from util.camera_transformations import invert_K, invert_RT
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid
 from time import time
 from tqdm.auto import tqdm
 
@@ -41,6 +42,42 @@ def accuracy(self, scores, y):
         acc = np.mean((preds == y)[y_mask].data.cpu().numpy())  # check if prediction is correct + average of it for all N inputs
         return acc
 
+# NOTE: Unused, might be used for debugging
+def check_norm(img, verbose=False):
+    """Try to determine the range of img and return the range in the form of: (left_end, right_end)"""
+    max_val = torch.max(img)
+    min_val = torch.min(img)
+
+    if verbose:
+        print("max_val:", max_val)
+        print("min_val:", min_val)
+
+    # Range: [0,1]
+    if (0 <= min_val and min_val <= 1) and (0 <= max_val and max_val <= 1):
+        return (0,1)
+
+    # Range: [-1,1]
+    elif (-1 <= min_val and min_val <= 1) and (-1 <= max_val and max_val <= 1):
+        return (-1,1)
+
+    # Range: [0,255]
+    elif (0 <= min_val and min_val <= 255) and (0 <= max_val and max_val <= 255):
+        return (0,255)
+
+    # Unknown range
+    else:
+        print("WARNING: Input image doesn't seem to have values in ranges: [0,1], [-1,1], [0,255]")
+        return None
+
+# NOTE: Unused, might be used for debugging
+def change_norm(img, in_range=None, out_range=[0,1]):
+    """Based on the norm scheme of img and output the same image in the new norm scheme""" 
+    if not in_range:
+        in_range = check_norm(img)
+
+    img = (img - in_range[0]) / (in_range[1] - in_range[0]) * (out_range[1] - out_range[0]) + out_range[0]
+    return img
+
 class NVS_Solver(object):
     default_adam_args = {"lr": 1e-4,
                          "betas": (0.9, 0.999),
@@ -68,7 +105,7 @@ class NVS_Solver(object):
         self.optim_args = optim_args_merged
         self.optim = optim
         self.loss_func = SynthesisLoss() # todo use custom values?
-        self.acc_func = None # todo what acc?
+        self.acc_func = QualityMetrics() # TODO: test it
         self.batch_loader = default_batch_loader
 
         self.writer = SummaryWriter(log_dir) if tensorboard_writer is None else tensorboard_writer
@@ -98,12 +135,12 @@ class NVS_Solver(object):
 
         loss_dir = self.loss_func(output['PredImg'], output['OutputImg'])
         if self.acc_func is not None:
-            pass
-            # TODO impl
+            acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
+            # TODO test it
 
-        return loss_dir, output, 0 # TODO acc impl, do not just return 0
+        return loss_dir, output, acc_dir
 
-    def handle_output(self, loss_dir, output, prefix, idx):
+    def handle_output(self, loss_dir, output, prefix, idx): # acc_dir argument needed
         # WRITE LOSSES
         for loss in loss_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Loss/' + loss,
@@ -111,13 +148,56 @@ class NVS_Solver(object):
                                    idx)
         self.writer.flush()
 
-        # WRITE IMAGES with output
-        #TODO see tmp_solver
+        # TODO: WRITE ACC
+        # for acc in acc_dir.keys():
+        #     self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
+        #                            acc_dir[acc].data.cpu().numpy(),
+        #                            idx)
+        return loss_dir['Total Loss'].data.cpu().numpy() # TODO: Also return acc_dir["psnr"], acc_dir["ssim"]?
 
-        #TODO handle accuracy
+    def visualize_output(self, output, take_slice=None, tag="image"):
+        """
+        Generic method for visualizing a single image or a whole batch
 
-        return loss_dir['Total Loss'].data.cpu().numpy()
+        Parameters
+        ----------
+        output: batch of data, containing input, target, prediction and depth image
+        take_slice: two element tuple or list can be specified to take a slice of the batch (default: take whole batch)
+        """
+        # TODO: input_batch and depth_batch are ignored for the moment, however, they can also be integrated later on
+        input_batch, target_batch, pred_batch, depth_batch = output["InputImg"].cpu(),\
+                                                             output["OutputImg"].cpu(),\
+                                                             output["PredImg"].cpu(),\
+                                                             output["PredDepth"].cpu()
+        with torch.no_grad():
+            # In case of a single image add one dimension to the beginning to create single image batch
+            if len(pred_batch.shape) == 3:
+                pred_batch = pred_batch.unsqueeze(0)
+                target_batch = target_batch.unsqueeze(0)
+            
+            if len(pred_batch.shape) != 4:
+                print("Only 3D or 4D tensors can be visualized")
+                return
 
+            # If slice specified, take a portion of the batch
+            if take_slice and (type(take_slice) in (list, tuple)) and (len(take_slice) == 2):
+                pred_batch = pred_batch[take_slice[0], take_slice[1]]
+                target_batch = target_batch[take_slice[0], take_slice[1]]
+                
+            # Store vstack of images: [pred_batch0, target_batch0, ...].T on img_lst
+            img_lst = torch.Tensor()
+
+            # Run a loop to interleave images in pred_batch and target_batch batches
+            for i in range(pred_batch.shape[0]):
+                # Each iteration: Pick pred_batch and its target_batch 
+                # (we need to extend the dimension of pred_batch and target_batch images with .unsqueeze(0))
+                img_lst = torch.cat((img_lst, pred_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0)), dim=0)
+            
+            img_grid = make_grid(img_lst, nrow=2) # Per row, pick two images from the stack # TODO: this idea can be extended, we can even parametrize this
+            # TODO: if needed, determine range of values and use make_grid flags: normalize, range
+
+            self.writer.add_image(tag, img_grid) # NOTE: add_image method expects image values in range [0,1]
+            self.writer.flush()
 
     def test(self, model, test_loader, test_prefix='/', log_nth=0):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -144,6 +224,7 @@ class NVS_Solver(object):
                     print("[Iteration {cur}/{max}] TEST loss: {loss}".format(cur=i + 1,
                                                                               max=len(test_loader),
                                                                               loss=loss))
+                    self.visualize_output(output, tag="test")
 
             mean_loss = np.mean(test_losses)
             mean_acc = np.mean(test_accs)
@@ -202,6 +283,7 @@ class NVS_Solver(object):
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
+                    self.visualize_output(train_output, tag="train")
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
@@ -235,6 +317,7 @@ class NVS_Solver(object):
                         print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                 max=len(val_loader),
                                                                                 loss=val_loss))
+                        self.visualize_output(val_output, tag="val")
 
                 mean_val_loss = np.mean(val_losses)
                 mean_val_acc = np.mean(val_accs)
