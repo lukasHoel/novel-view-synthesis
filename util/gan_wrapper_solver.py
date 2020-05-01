@@ -115,7 +115,7 @@ class GAN_Wrapper_Solver(object):
                 # RUN GENERATOR steps times
                 all_output_images = []
                 for j in range(0, steps):
-                    nvs_losses, output, _ = self.nvs_solver.forward_pass(model, sample) # todo accuracy is currently _
+                    nvs_losses, output, nvs_accs = self.nvs_solver.forward_pass(model, sample)
                     g_losses = self.netD.run_generator_one_step(output["PredImg"], output["OutputImg"])
                     (
                             g_losses["Total Loss"] / weight
@@ -143,15 +143,16 @@ class GAN_Wrapper_Solver(object):
                 nvs_losses.update(d_losses)
 
                 # LOGGING of loss
-                train_loss = self.nvs_solver.handle_output(nvs_losses, all_output_images[-1], 'Train/', i)
+                train_loss, train_acc = self.nvs_solver.log_loss_and_acc(nvs_losses, nvs_accs, 'Train/', i)
                 train_losses.append(train_loss) # TODO is this correct? see above: why not combine everything into Total Loss?
-                train_accs.append(0) # todo acc
+                train_accs.append(train_acc)
 
                 # Print loss every log_nth iteration
                 if (i % log_nth == 0):
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
+                    self.nvs_solver.visualize_output(all_output_images[-1], tag="train")
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
@@ -175,16 +176,17 @@ class GAN_Wrapper_Solver(object):
                 val_accs = []
                 for i, sample in enumerate(tqdm(val_loader)):
 
-                    nvs_losses, output, _ = self.nvs_solver.forward_pass(model, sample)  # todo accuracy is currently _
-                    val_loss = self.nvs_solver.handle_output(nvs_losses, output, 'Val/', i)
+                    nvs_losses, output, nvs_accs = self.nvs_solver.forward_pass(model, sample)
+                    val_loss, val_acc = self.nvs_solver.log_loss_and_acc(nvs_losses, nvs_accs, 'Val/', i)
                     val_losses.append(val_loss)
-                    val_accs.append(0) # todo acc
+                    val_accs.append(val_acc)
 
                     # Print loss every log_nth iteration
                     if (i % log_nth == 0):
                         print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                 max=len(val_loader),
                                                                                 loss=val_loss))
+                        self.nvs_solver.visualize_output(output, tag="val")
 
                 mean_val_loss = np.mean(val_losses)
                 mean_val_acc = np.mean(val_accs)

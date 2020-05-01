@@ -16,7 +16,7 @@ class NovelViewSynthesisModel(nn.Module):
                  use_rgb_features=False,
                  use_gt_depth=False,
                  use_inverse_depth=False,
-                 normalize_images=False): # todo W=imageSize for PtsManipulator?
+                 normalize_images=True): # todo W=imageSize for PtsManipulator?
         super().__init__()
 
         # PARAMETERS
@@ -125,8 +125,7 @@ class NovelViewSynthesisModel(nn.Module):
         # DECODE IMAGE
         transformed_img = self.projector(transformed_img_features)
 
-        # NORMALIZE IMAGES
-        # TODO Where is this used?
+        # NORMALIZE IMAGES: Output of refinement_network (self.projector) is tanh --> [-1,1] --> normalize to [0,1]
         if self.normalize_images:
             input_img = 0.5 * input_img + 0.5
             gt_img = 0.5 * gt_img + 0.5

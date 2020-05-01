@@ -33,7 +33,7 @@ class SynthesisLoss(nn.Module):
         elif name == "content":
             loss = PerceptualLoss()
         else:
-            raise "Invalid loss name in SynthesisLoss"
+            raise ValueError("Invalid loss name in SynthesisLoss: " + name)
         # TODO: If needed, more loss classes can be introduced here later on.
 
         if torch.cuda.is_available():
@@ -85,7 +85,7 @@ class QualityMetrics(nn.Module):
         elif name == "SSIM":
             metric = SSIM()
         else:
-            raise "Invalid metric name in QualityMetrics"
+            raise ValueError("Invalid metric name in QualityMetrics: " + name)
         # TODO: If needed, more metric classes can be introduced here later on.
 
         if torch.cuda.is_available():

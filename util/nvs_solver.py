@@ -34,14 +34,6 @@ def default_batch_loader(batch):
     depth_img = batch['depth']
     return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, depth_img
 
-# TODO which accuracy fits? are they even already calculated in SynthesisLoss as other "losses"?
-def accuracy(self, scores, y):
-    with torch.no_grad():
-        _, preds = torch.max(scores, 1) # select highest value as the predicted class
-        y_mask = y >= 0 # do not allow "-1" segmentation value
-        acc = np.mean((preds == y)[y_mask].data.cpu().numpy())  # check if prediction is correct + average of it for all N inputs
-        return acc
-
 # NOTE: Unused, might be used for debugging
 def check_norm(img, verbose=False):
     """Try to determine the range of img and return the range in the form of: (left_end, right_end)"""
@@ -134,13 +126,14 @@ class NVS_Solver(object):
         output = model(batch)
 
         loss_dir = self.loss_func(output['PredImg'], output['OutputImg'])
+        acc_dir = None
         if self.acc_func is not None:
             acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
             # TODO test it
 
         return loss_dir, output, acc_dir
 
-    def handle_output(self, loss_dir, output, prefix, idx): # acc_dir argument needed
+    def log_loss_and_acc(self, loss_dir, acc_dir, prefix, idx): # acc_dir argument needed
         # WRITE LOSSES
         for loss in loss_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Loss/' + loss,
@@ -148,12 +141,12 @@ class NVS_Solver(object):
                                    idx)
         self.writer.flush()
 
-        # TODO: WRITE ACC
-        # for acc in acc_dir.keys():
-        #     self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
-        #                            acc_dir[acc].data.cpu().numpy(),
-        #                            idx)
-        return loss_dir['Total Loss'].data.cpu().numpy() # TODO: Also return acc_dir["psnr"], acc_dir["ssim"]?
+        # WRITE ACCS
+        for acc in acc_dir.keys():
+            self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
+                                   acc_dir[acc].data.cpu().numpy(),
+                                   idx)
+        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["psnr"] # could also use acc_dir["ssim"]
 
     def visualize_output(self, output, take_slice=None, tag="image"):
         """
@@ -214,8 +207,8 @@ class NVS_Solver(object):
             test_losses = []
             test_accs = []
             for i, sample in enumerate(tqdm(test_loader)):
-                loss_dir, output, test_acc = self.forward_pass(model, sample)
-                loss = self.handle_output(loss_dir, output, test_name, i)
+                loss_dir, output, test_acc_dir = self.forward_pass(model, sample)
+                loss, test_acc = self.log_loss_and_acc(loss_dir, test_acc_dir, test_name, i)
                 test_losses.append(loss)
                 test_accs.append(test_acc)
 
@@ -267,14 +260,14 @@ class NVS_Solver(object):
             for i, sample in enumerate(tqdm(train_loader)):  # for every minibatch in training set
                 # FORWARD PASS --> Loss + acc calculation
                 #print("Time until next forward pass (loading from dataloader + backward pass) took: {}".format(time() - start))
-                train_loss_dir, train_output, train_acc = self.forward_pass(model, sample)
+                train_loss_dir, train_output, train_acc_dir = self.forward_pass(model, sample)
                 #start = time()
 
                 # BACKWARD PASS --> Gradient-Descent update
                 self.backward_pass(train_loss_dir, optim)
 
                 # LOGGING of loss and accuracy
-                train_loss = self.handle_output(train_loss_dir, train_output, 'Train/', i)
+                train_loss, train_acc = self.log_loss_and_acc(train_loss_dir, train_acc_dir, 'Train/', i)
                 train_losses.append(train_loss)
                 train_accs.append(train_acc)
 
@@ -307,8 +300,8 @@ class NVS_Solver(object):
                 val_accs = []
                 for i, sample in enumerate(tqdm(val_loader)):
                     # FORWARD PASS --> Loss + acc calculation
-                    val_loss_dir, val_output, val_acc = self.forward_pass(model, sample)
-                    val_loss = self.handle_output(val_loss_dir, val_output, 'Val/', i)
+                    val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
+                    val_loss, val_acc = self.log_loss_and_acc(val_loss_dir, val_acc_dir, 'Val/', i)
                     val_losses.append(val_loss)
                     val_accs.append(val_acc)
 
