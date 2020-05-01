@@ -81,8 +81,8 @@ class RasterizePointsXYsBlending(nn.Module):
         print("3D Pointcloud: {}".format(pts3D.shape))
 
         # flips the x and y coordinate
-        pts3D[:,:,1] = - pts3D[:,:,1]
-        pts3D[:,:,0] = - pts3D[:,:,0]
+        #pts3D[:,:,1] = - pts3D[:,:,1]
+        #pts3D[:,:,0] = - pts3D[:,:,0]
 
         # Add on the default feature to the end of the src
         # src = torch.cat((src, self.default_feature.repeat(bs, 1, 1)), 2)
@@ -114,6 +114,10 @@ class RasterizePointsXYsBlending(nn.Module):
 
         print("alphas: ", alphas.shape)
         print("pointclouds object: {}".format(pts3D.features_packed().shape))
+
+        print("alphas[0,0,0,0]: ", alphas[0,0,0,0])
+        print("alphas[0,0,100,100]: ", alphas[0, 0, 100, 100])
+        print("alphas: ", alphas)
 
         if self.accumulation == 'alphacomposite':
             transformed_src_alphas = compositing.alpha_composite(
