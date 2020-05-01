@@ -177,6 +177,8 @@ class ICLNUIMDataset(Dataset):
             if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
                 output_idx = idx+1 if idx < self.size-1 else idx-1
 
+            output_idx = idx + 1 if idx < self.size - 1 else idx # todo remove
+
             # load image of new index
             output_image = self.load_image(output_idx)
 
