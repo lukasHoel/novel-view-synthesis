@@ -32,7 +32,7 @@ class ICLNUIMDataset(Dataset):
     # regex to read lines from the camera .txt file
     cam_pattern = "(?P<id>.*\w).*= \[(?P<x>.*), (?P<y>.*), (?P<z>.*)\].*"
 
-    def __init__(self, path, depth_to_image_plane=True, sampleOutput=True, transform=None, cam_transforms=False):
+    def __init__(self, path, depth_to_image_plane=True, sampleOutput=True, transform=None, cam_transforms=False, nxf=2):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
@@ -42,6 +42,7 @@ class ICLNUIMDataset(Dataset):
                 For example: If the 500. item is accessed, the second camera pose (R|T) will be from any of the poses of the items 470-530 (excluding 500).
         :param transform: transform that should be applied to the input image AND the target depth
         '''
+        self.nxf = nxf
         self.transform = transform
         self.cam_transforms = cam_transforms
         self.depth_to_image_plane = depth_to_image_plane
@@ -161,6 +162,9 @@ class ICLNUIMDataset(Dataset):
         depth = self.load_depth(idx)
 
         RT1 = self.load_cam(idx)
+        R1 = RT1[:,:3]
+        T1 = RT1[:,3]
+
         cam = {
             'RT1': RT1,
             'K': ICLNUIMDataset.K
@@ -177,14 +181,30 @@ class ICLNUIMDataset(Dataset):
             if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
                 output_idx = idx+1 if idx < self.size-1 else idx-1
 
-            output_idx = idx + 1 if idx < self.size - 1 else idx # todo remove
+            output_idx = idx + self.nxf if idx < self.size - 1 else idx # todo remove
 
             # load image of new index
             output_image = self.load_image(output_idx)
 
             # load cam of new index
             RT2 = self.load_cam(output_idx)
-            cam['RT2'] = RT2
+
+            #calculate relative RT matrix
+            R2 = RT2[:, :3]
+            T2 = RT2[:, 3]
+            T = R2.T.dot(T1 - T2)/50.
+            RT = np.eye(4)
+            RT[0:3, 0:3] = R2.T @ R1
+            RT[:3, 3] = T
+            RT = RT.astype(np.float32)
+            RTinv = np.linalg.inv(RT).astype(np.float32)
+            identity = torch.eye(4)
+            RT = torch.from_numpy(RT)
+            RTinv = torch.from_numpy(RTinv)
+            cam['RT1'] = identity
+            cam['RT1inv'] = identity
+            cam['RT2'] = RT
+            cam['RT2inv'] = RTinv
 
             output = {
                 'image': output_image,
@@ -193,8 +213,8 @@ class ICLNUIMDataset(Dataset):
 
         if self.cam_transforms:
             cam['K'], cam['Kinv'] = transform_matrices(cam['K'], isK=True)
-            cam['RT1'], cam['RT1inv'] = transform_matrices(cam['RT1'])
-            cam['RT2'], cam['RT2inv'] = transform_matrices(cam['RT2'])
+            #cam['RT1'], cam['RT1inv'] = transform_matrices(cam['RT1'])
+            #cam['RT2'], cam['RT2inv'] = transform_matrices(cam['RT2'])
 
 
         sample = {
