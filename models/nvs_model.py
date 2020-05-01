@@ -12,7 +12,9 @@ class NovelViewSynthesisModel(nn.Module):
                  max_z=0,
                  min_z=0,
                  enc_dims=[3, 8, 16, 32],
+                 enc_blk_types=["id", "id", "id"],
                  dec_dims=[32, 64, 32, 16, 3],
+                 dec_blk_types=["id", "avg", "ups", "id"],
                  use_rgb_features=False,
                  use_gt_depth=False,
                  use_inverse_depth=False,
@@ -24,7 +26,9 @@ class NovelViewSynthesisModel(nn.Module):
         self.max_z = max_z
         self.min_z = min_z
         self.enc_dims = enc_dims
+        self.enc_blk_types = enc_blk_types
         self.dec_dims = dec_dims
+        self.dec_blk_types = dec_blk_types
 
         # CONTROLS
         self.use_rgb_features = use_rgb_features
@@ -35,7 +39,7 @@ class NovelViewSynthesisModel(nn.Module):
         # ENCODER
         # Encode features to a given resolution
         self.encoder = FeatureNet(res_block_dims=self.enc_dims,
-                                  res_block_types=["id"]*len(self.enc_dims))
+                                  res_block_types=self.enc_blk_types)
 
         # POINT CLOUD TRANSFORMER
         # REGRESS 3D POINTS
@@ -48,14 +52,15 @@ class NovelViewSynthesisModel(nn.Module):
         '''
 
         # 3D Points transformer
-        if self.opt.use_rgb_features:
+        if self.use_rgb_features:
             self.pts_transformer = PtsManipulator(opt.W, C=3, opt=opt) #todo opt
         else:
             self.pts_transformer = PtsManipulator(opt.W, C=feature_channels, opt=opt) #todo opt
 
+        # DECODER
         # REFINEMENT NETWORK
         self.projector = RefineNet(res_block_dims=self.dec_dims,
-                                   res_block_types=["id"] * (len(self.dec_dims) - 1))
+                                   res_block_types=self.dec_blk_types)
 
         # TODO WHERE IS THIS NEEDED?
         '''
