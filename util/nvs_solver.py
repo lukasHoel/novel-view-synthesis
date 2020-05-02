@@ -149,7 +149,7 @@ class NVS_Solver(object):
                                    idx)
         return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["psnr"].data.cpu().numpy() # could also use acc_dir["ssim"]
 
-    def visualize_output(self, output, take_slice=None, tag="image"):
+    def visualize_output(self, output, take_slice=None, tag="image", step=0):
         """
         Generic method for visualizing a single image or a whole batch
 
@@ -190,7 +190,7 @@ class NVS_Solver(object):
             img_grid = make_grid(img_lst, nrow=2) # Per row, pick two images from the stack # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
-            self.writer.add_image(tag, img_grid) # NOTE: add_image method expects image values in range [0,1]
+            self.writer.add_image(tag, img_grid, global_step=step) # NOTE: add_image method expects image values in range [0,1]
             self.writer.flush()
 
     def test(self, model, test_loader, test_prefix='/', log_nth=0):
@@ -218,7 +218,7 @@ class NVS_Solver(object):
                     print("[Iteration {cur}/{max}] TEST loss: {loss}".format(cur=i + 1,
                                                                               max=len(test_loader),
                                                                               loss=loss))
-                    self.visualize_output(output, tag="test")
+                    self.visualize_output(output, tag="test", step=i)
 
             mean_loss = np.mean(test_losses)
             mean_acc = np.mean(test_accs)
@@ -277,7 +277,7 @@ class NVS_Solver(object):
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
-                    self.visualize_output(train_output, tag="train")
+                    self.visualize_output(train_output, tag="train", step=i)
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
@@ -311,7 +311,7 @@ class NVS_Solver(object):
                         print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                 max=len(val_loader),
                                                                                 loss=val_loss))
-                        self.visualize_output(val_output, tag="val")
+                        self.visualize_output(val_output, tag="val", step=i)
 
                 mean_val_loss = np.mean(val_losses)
                 mean_val_acc = np.mean(val_accs)
