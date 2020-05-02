@@ -258,7 +258,6 @@ class ICLNUIMDataset(Dataset):
         if self.transform:
             sample['image'] = self.transform(sample['image'])
             sample['depth'] = self.transform(sample['depth'])
-            sample['depth'] = self.transform(sample['depth'])
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
 
@@ -279,7 +278,7 @@ def test():
                              depth_to_image_plane=True,
                              sampleOutput=True,
                              RTrelativeToOutput=False,
-                             inverse_depth=True)
+                             inverse_depth=False)
     #dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleOutput=True);
 
     print("Length of dataset: {}".format(len(dataset)))
