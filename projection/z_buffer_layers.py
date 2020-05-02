@@ -77,8 +77,8 @@ class RasterizePointsXYsBlending(nn.Module):
         # Because we have done re-projection, the i-th coordinate in the image raster must no longer be identical to (x,y)!
         # src.shape = (bs, c, w*h) --> c features for every element in the image raster (w*h)
 
-        print("Features: {}".format(src.shape))
-        print("3D Pointcloud: {}".format(pts3D.shape))
+        #print("Features: {}".format(src.shape))
+        #print("3D Pointcloud: {}".format(pts3D.shape))
 
         # flips the x and y coordinate
         pts3D[:,:,1] = - pts3D[:,:,1]
@@ -90,21 +90,21 @@ class RasterizePointsXYsBlending(nn.Module):
         radius = float(self.radius) / float(image_size) * 2.0 # convert radius to fit the [-1,1] NDC ?? Or is this just arbitrary scaling s.t. radius as meaningful size?
         params = compositing.CompositeParams(radius=radius)
 
-        print("Radius - before: {}, converted: {}".format(self.radius, radius))
+        #print("Radius - before: {}, converted: {}".format(self.radius, radius))
 
         pts3D = Pointclouds(points=pts3D, features=src.permute(0,2,1))
         points_idx, _, dist = rasterize_points(
             pts3D, image_size, radius, self.points_per_pixel
         ) # see method signature for meaning of these output values
 
-        print("points_idx: {}".format(points_idx.shape))
-        print("dist: {}".format(points_idx.shape))
+        #print("points_idx: {}".format(points_idx.shape))
+        #print("dist: {}".format(points_idx.shape))
 
-        print("Max dist: ", dist.max(), pow(radius, self.rad_pow))
+        #print("Max dist: ", dist.max(), pow(radius, self.rad_pow))
 
         dist = dist / pow(radius, self.rad_pow) # equation 1 from the paper (3.2): this calculates N(p_i, l_mn) from the d2 dist
 
-        print("Max dist: ", dist.max())
+        #print("Max dist: ", dist.max())
 
         alphas = (
             (1 - dist.clamp(max=1, min=1e-3).pow(0.5))
@@ -112,9 +112,9 @@ class RasterizePointsXYsBlending(nn.Module):
             .permute(0, 3, 1, 2)
         ) # equation 2 from the paper (3.2): prepares alpha values for composition of the feature vectors
 
-        print("alphas: ", alphas.shape)
-        print("pointclouds object: {}".format(pts3D.features_packed().shape))
-        print("alphas: ", alphas)
+        #print("alphas: ", alphas.shape)
+        #print("pointclouds object: {}".format(pts3D.features_packed().shape))
+        #print("alphas: ", alphas)
 
         if self.accumulation == 'alphacomposite':
             transformed_src_alphas = compositing.alpha_composite(

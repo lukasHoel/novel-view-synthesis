@@ -4,37 +4,57 @@ import torch
 def invert_RT(RT):
     """ Given an RT matrix (e.g. [R | T]) matrix where R is
     indeed valid, then inverts this.
-    RT is assumed to have three dimensions: RT.shape = (batch_size, 3, 4) -> each batch is a 3x4 [R|T] matrix.
+    RT is assumed to have two or three dimensions: RT.shape = (batch_size, 3, 4) -> each batch is a 3x4 [R|T] matrix.
     """
-    R = RT[:, 0:3, 0:3]
-    T = RT[:, :, 3:]
+    if len(RT.shape) == 3:
+        R = RT[:, 0:3, 0:3]
+        T = RT[:, :, 3:]
 
-    # Get inverse of the rotation matrix
-    Rinv = R.permute(0, 2, 1)
-    Tinv = -Rinv.bmm(T)
+        # Get inverse of the rotation matrix
+        Rinv = R.permute(0, 2, 1)
+        Tinv = -Rinv.bmm(T)
 
-    RTinv = torch.cat((Rinv, Tinv), 2)
+        RTinv = torch.cat((Rinv, Tinv), 2)
 
-    return RTinv
+        return RTinv
+    else:
+        R = RT[0:3, 0:3]
+        T = RT[:, 3:]
 
+        # Get inverse of the rotation matrix
+        Rinv = R.permute(1,0)
+        Tinv = -Rinv.matmul(T)
+
+        RTinv = torch.cat((Rinv, Tinv), 1)
+
+        return RTinv
 
 def invert_K(K):
     """ Given a K matrix (an intrinsic matrix) of the form
     [f 0 px]
     [0 f py]
     [0 0  1], inverts it.
-    K is assumed to have three dimensions: K.shape = (batch_size, 3, 3) -> each batch is a 3x3 K matrix.
+    K is assumed to have two or three dimensions: K.shape = (batch_size, 3, 3) -> each batch is a 3x3 K matrix.
     """
-    K_inv = (
-        torch.eye(K.size(1)).to(K.device).unsqueeze(0).repeat(K.size(0), 1, 1)
-    )
+    if len(K.shape) == 3:
+        K_inv = (
+            torch.eye(K.size(1)).to(K.device).unsqueeze(0).repeat(K.size(0), 1, 1)
+        )
 
-    K_inv[:, 0, 0] = 1 / K[:, 0, 0]
-    K_inv[:, 0, 2] = -K[:, 0, 2] / K[:, 0, 0]
-    K_inv[:, 1, 1] = 1 / K[:, 1, 1]
-    K_inv[:, 1, 2] = -K[:, 1, 2] / K[:, 1, 1]
+        K_inv[:, 0, 0] = 1 / K[:, 0, 0]
+        K_inv[:, 0, 2] = -K[:, 0, 2] / K[:, 0, 0]
+        K_inv[:, 1, 1] = 1 / K[:, 1, 1]
+        K_inv[:, 1, 2] = -K[:, 1, 2] / K[:, 1, 1]
 
-    return K_inv
+        return K_inv
+    else:
+        K_inv = K.clone()
+        K_inv[0, 0] = 1 / K[0, 0]
+        K_inv[0, 2] = -K[0, 2] / K[0, 0]
+        K_inv[1, 1] = 1 / K[1, 1]
+        K_inv[1, 2] = -K[1, 2] / K[1, 1]
+
+        return K_inv
 
 
 def transform_matrices(mat, isK = False):
