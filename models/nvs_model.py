@@ -8,7 +8,7 @@ from models.enc_dec.refinement_network import RefineNet
 
 class NovelViewSynthesisModel(nn.Module):
     def __init__(self,
-                 W,
+                 imageSize,
                  max_z=0,
                  min_z=0,
                  enc_dims=[3, 8, 16, 32],
@@ -18,11 +18,11 @@ class NovelViewSynthesisModel(nn.Module):
                  use_rgb_features=False,
                  use_gt_depth=False,
                  use_inverse_depth=False,
-                 normalize_images=True): # todo W=imageSize for PtsManipulator?
+                 normalize_images=False):
         super().__init__()
 
         # PARAMETERS
-        self.W = W
+        self.imageSize = imageSize
         self.max_z = max_z
         self.min_z = min_z
         self.enc_dims = enc_dims
@@ -53,14 +53,22 @@ class NovelViewSynthesisModel(nn.Module):
 
         # 3D Points transformer
         if self.use_rgb_features:
-            self.pts_transformer = PtsManipulator(opt.W, C=3, opt=opt) #todo opt
+            self.pts_transformer = PtsManipulator(imageSize, C=3)
         else:
-            self.pts_transformer = PtsManipulator(opt.W, C=feature_channels, opt=opt) #todo opt
+            self.pts_transformer = PtsManipulator(imageSize, C=self.enc_dims[-1])
 
         # DECODER
         # REFINEMENT NETWORK
-        self.projector = RefineNet(res_block_dims=self.dec_dims,
-                                   res_block_types=self.dec_blk_types)
+        # what if use_rgb_features? Then dims need to be different! Hardcode them in that case!
+        if self.use_rgb_features:
+            self.projector = RefineNet(res_block_dims=[3,8,16,8,3],
+                                       res_block_types=["id"] * 4, # todo better way of doing it?
+                                       activate_out=nn.Tanh())
+        else:
+            self.projector = RefineNet(res_block_dims=self.dec_dims,
+                                       res_block_types=self.dec_blk_types,
+                                       activate_out=nn.Tanh())
+
 
         # TODO WHERE IS THIS NEEDED?
         '''
@@ -130,7 +138,8 @@ class NovelViewSynthesisModel(nn.Module):
         # DECODE IMAGE
         transformed_img = self.projector(transformed_img_features)
 
-        # NORMALIZE IMAGES: Output of refinement_network (self.projector) is tanh --> [-1,1] --> normalize to [0,1]
+        # NORMALIZE IMAGES
+        # Output of projector (refinement_network) is tanh --> [-1,1] so transform it to [0,1] here
         if self.normalize_images:
             input_img = 0.5 * input_img + 0.5
             gt_img = 0.5 * gt_img + 0.5
