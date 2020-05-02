@@ -247,6 +247,7 @@ class ICLNUIMDataset(Dataset):
         if self.transform:
             sample['image'] = self.transform(sample['image'])
             sample['depth'] = self.transform(sample['depth'])
+            sample['depth'] = sample['depth'].pow_(-1)
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
 
