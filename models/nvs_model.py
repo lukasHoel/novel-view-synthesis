@@ -175,7 +175,7 @@ class NovelViewSynthesisModel(nn.Module):
         # Output of projector (refinement_network) is tanh --> [-1,1] so transform it to [0,1] here
         if self.normalize_images:
             input_img = 0.5 * input_img + 0.5
-            gt_img = 0.5 * gt_img + 0.5
+            gt_img = 0.5 * gt_img + 0.5 # TODO But do I need to modify input_img and gt_img for this step???
             transformed_img = 0.5 * transformed_img + 0.5
 
         return {
