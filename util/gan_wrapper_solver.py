@@ -25,6 +25,7 @@ class GAN_Wrapper_Solver(object):
                  optim_d_args={},
                  optim_g=torch.optim.Adam,
                  optim_g_args={},
+                 g_loss_func=None, # if left None, the NVS_Solver will instantiate a standard SynthesisLoss class
                  extra_args={},
                  log_dir=None,
                  init_discriminator_weights=True):
@@ -56,6 +57,7 @@ class GAN_Wrapper_Solver(object):
 
         self.nvs_solver = NVS_Solver(optim=optim_g,
                                      optim_args=optim_g_args,
+                                     loss_func=g_loss_func,
                                      extra_args={},
                                      tensorboard_writer=self.writer)
 

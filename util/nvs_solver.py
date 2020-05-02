@@ -79,6 +79,7 @@ class NVS_Solver(object):
     def __init__(self,
                  optim=torch.optim.Adam,
                  optim_args={},
+                 loss_func=None,
                  extra_args={},
                  tensorboard_writer=None,
                  log_dir=None):
@@ -96,7 +97,7 @@ class NVS_Solver(object):
         optim_args_merged.update(optim_args)
         self.optim_args = optim_args_merged
         self.optim = optim
-        self.loss_func = SynthesisLoss() # todo use custom values?
+        self.loss_func = loss_func if loss_func is not None else SynthesisLoss()
         self.acc_func = QualityMetrics() # TODO: test it
         self.batch_loader = default_batch_loader
 
