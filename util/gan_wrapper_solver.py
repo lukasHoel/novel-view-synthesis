@@ -61,7 +61,9 @@ class GAN_Wrapper_Solver(object):
                                      extra_args={},
                                      tensorboard_writer=self.writer)
 
-        nvs_solver_args = {'generator_'+k: v for k, v in self.nvs_solver.hparam_dict.items()}
+        nvs_solver_args = {'generator_'+k: str(v) for k, v in self.nvs_solver.hparam_dict.items()}
+        for key in extra_args.keys():
+            extra_args[key] = str(extra_args[key])
         self.hparam_dict = {'discriminator': type(self.netD).__name__,
                             'discriminator_optim': self.optim_d.__name__,
                             'discriminator_learning_rate': self.optim_d_args['lr'],

@@ -102,6 +102,9 @@ class NVS_Solver(object):
         self.batch_loader = default_batch_loader
 
         self.writer = SummaryWriter(log_dir) if tensorboard_writer is None else tensorboard_writer
+
+        for key in extra_args.keys():
+            extra_args[key] = str(extra_args[key])
         self.hparam_dict = {'loss_function': type(self.loss_func).__name__,
                             'optimizer': self.optim.__name__,
                             'learning_rate': self.optim_args['lr'],

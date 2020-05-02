@@ -15,6 +15,7 @@ class NovelViewSynthesisModel(nn.Module):
                  enc_blk_types=["id", "id", "id"],
                  dec_dims=[32, 64, 32, 16, 3],
                  dec_blk_types=["id", "avg", "ups", "id"],
+                 dec_activation_func=nn.Sigmoid(),
                  points_per_pixel=8,
                  learn_feature=True,
                  radius=1.5,
@@ -39,6 +40,7 @@ class NovelViewSynthesisModel(nn.Module):
         self.enc_blk_types = enc_blk_types
         self.dec_dims = dec_dims
         self.dec_blk_types = dec_blk_types
+        self.dec_activation_func = dec_activation_func
 
         # for projection
         self.points_per_pixel = points_per_pixel
@@ -99,7 +101,8 @@ class NovelViewSynthesisModel(nn.Module):
 
         self.projector = RefineNet(res_block_dims=self.dec_dims,
                                    res_block_types=self.dec_blk_types,
-                                   activate_out=nn.Tanh())
+                                   activate_out=self.dec_activation_func)
+                                   #activate_out=nn.Tanh())
 
 
         # TODO WHERE IS THIS NEEDED?
@@ -150,6 +153,8 @@ class NovelViewSynthesisModel(nn.Module):
                 raise ValueError("depth_img must not be None when using gt_depth")
             regressed_pts = depth_img
 
+        #img_features.requires_grad = True # use when no other network is used, but backprop should still work (even though doing nothing).
+
         # APPLY TRANSFORMATION and REPROJECT
         transformed_img_features = self.pts_transformer.forward_justpts(
             img_features,
@@ -170,6 +175,7 @@ class NovelViewSynthesisModel(nn.Module):
 
         # DECODE IMAGE
         transformed_img = self.projector(transformed_img_features)
+        #transformed_img = transformed_img_features # use this when refinement network should not be used
 
         # NORMALIZE IMAGES
         # Output of projector (refinement_network) is tanh --> [-1,1] so transform it to [0,1] here
