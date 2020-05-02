@@ -4,40 +4,57 @@ import torch.nn as nn
 EPS = 1e-2
 
 def get_splatter(
-        name, size=256, C=3, points_per_pixel=8
+        name, size, C, points_per_pixel, learn_feature, radius, rad_pow, accumulation, accumulation_tau
 ):
     if name == "xyblending":
         from projection.z_buffer_layers import RasterizePointsXYsBlending
 
         return RasterizePointsXYsBlending(
             C=C,
-            # learn_feature=opt.learn_default_feature,
-            # radius=opt.radius,
+            learn_feature=learn_feature,
+            radius=radius,
+            rad_pow=rad_pow,
             size=size,
             points_per_pixel=points_per_pixel,
-            #accumulation_tau=1
+            accumulation=accumulation,
+            accumulation_tau=accumulation_tau
         )
-    # TODO: think about adding new parameters from the adapted version of this class (due to removal of opt...)
-    # New parameters are: rad_pow, accumulation, accumulation_tau (see also paper equations 1 and 2)
 
     else:
         raise NotImplementedError()
 
 
 class PtsManipulator(nn.Module):
-    def __init__(self, W, C=3):
+    def __init__(self,
+                 imageSize,
+                 C,
+                 learn_feature=True,
+                 radius=1.5,
+                 points_per_pixel=8,
+                 accumulation_tau=1,
+                 rad_pow=2,
+                 accumulation='alphacomposite'
+                 ):
         super().__init__()
 
         self.splatter = get_splatter(
-            "xyblending", None, size=W, C=C, points_per_pixel=8
+            name="xyblending",
+            size=imageSize,
+            C=C,
+            points_per_pixel=points_per_pixel,
+            learn_feature=learn_feature,
+            radius=radius,
+            rad_pow=rad_pow,
+            accumulation=accumulation,
+            accumulation_tau=accumulation_tau
         )
 
         # create coordinate system for x and y
-        xs = torch.linspace(0, W - 1, W) / float(W - 1) * 2 - 1
-        ys = torch.linspace(0, W - 1, W) / float(W - 1) * 2 - 1
+        xs = torch.linspace(0, imageSize - 1, imageSize) / float(imageSize - 1) * 2 - 1
+        ys = torch.linspace(0, imageSize - 1, imageSize) / float(imageSize - 1) * 2 - 1
 
-        xs = xs.view(1, 1, 1, W).repeat(1, 1, W, 1)
-        ys = ys.view(1, 1, W, 1).repeat(1, 1, 1, W)
+        xs = xs.view(1, 1, 1, imageSize).repeat(1, 1, imageSize, 1)
+        ys = ys.view(1, 1, imageSize, 1).repeat(1, 1, 1, imageSize)
 
         # build homogeneous coordinate system with [X, Y, 1, 1] to prepare for depth
         xyzs = torch.cat(
@@ -81,24 +98,24 @@ class PtsManipulator(nn.Module):
 
         # Normalize x and y to [-1,1] range
         min_x = torch.min(sampler[:, 0, :], dim=1)
-        print("MIN_X: ", min_x)
+        #print("MIN_X: ", min_x)
         max_x = torch.max(sampler[:, 0, :], dim=1)
-        print("MAX_X: ", max_x)
+        #print("MAX_X: ", max_x)
         sampler[:, 0, :] = 2 * (sampler[:, 0, :] - min_x.values) / (max_x.values - min_x.values) - 1
-        min_x = torch.min(sampler[:, 0, :], dim=1)
-        print("MIN_X: ", min_x)
-        max_x = torch.max(sampler[:, 0, :], dim=1)
-        print("MAX_X: ", max_x)
+        #min_x = torch.min(sampler[:, 0, :], dim=1)
+        #print("MIN_X: ", min_x)
+        #max_x = torch.max(sampler[:, 0, :], dim=1)
+        #print("MAX_X: ", max_x)
 
         min_y = torch.min(sampler[:, 1, :], dim=1)
-        print("MIN_Y: ", min_y)
+        #print("MIN_Y: ", min_y)
         max_y = torch.max(sampler[:, 1, :], dim=1)
-        print("MAX_Y: ", max_y)
+        #print("MAX_Y: ", max_y)
         sampler[:, 1, :] = 2 * (sampler[:, 1, :] - min_y.values) / (max_y.values - min_y.values) - 1
-        min_y = torch.min(sampler[:, 1, :], dim=1)
-        print("MIN_Y: ", min_y)
-        max_y = torch.max(sampler[:, 1, :], dim=1)
-        print("MAX_Y: ", max_y)
+        #min_y = torch.min(sampler[:, 1, :], dim=1)
+        #print("MIN_Y: ", min_y)
+        #max_y = torch.max(sampler[:, 1, :], dim=1)
+        #print("MAX_Y: ", max_y)
 
         # normalize z to [0,1]
         '''

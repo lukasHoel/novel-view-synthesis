@@ -277,7 +277,7 @@ class DiscriminatorLoss(nn.Module):
         self.opt.lr = lr
         self.opt.gan_mode = gan_mode
         self.opt.no_ganFeat_loss = no_ganFeat_loss
-        self.opt.lamda_feat = lambda_feat
+        self.opt.lambda_feat = lambda_feat
         self.opt.num_D = num_D
         self.opt.ndf = ndf
         self.opt.output_nc = output_nc

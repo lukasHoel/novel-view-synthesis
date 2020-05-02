@@ -19,18 +19,18 @@ def to_cuda(data_tuple):
     out = ()
     if torch.cuda.is_available():
         for data in data_tuple:
-            out += data.cuda()
+            out += (data.cuda(),)
     return out
 
 def default_batch_loader(batch):
     input_img = batch['image']
     K = batch['cam']['K']
-    K_inv = invert_K(K)
+    K_inv = batch['cam']['Kinv']
     input_RT = batch['cam']['RT1']
-    input_RT_inv = invert_RT(input_RT)
+    input_RT_inv = batch['cam']['RT1inv']
     output_RT = batch['cam']['RT2']
-    output_RT_inv = invert_RT(output_RT)
-    gt_img = batch['output']['image']
+    output_RT_inv = batch['cam']['RT2inv']
+    gt_img = batch['output']['image'] if batch['output'] is not None else None
     depth_img = batch['depth']
     return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, depth_img
 
@@ -123,7 +123,7 @@ class NVS_Solver(object):
     def forward_pass(self, model, batch):
 
         batch = to_cuda(self.batch_loader(batch))
-        output = model(batch)
+        output = model(*batch)
 
         loss_dir = self.loss_func(output['PredImg'], output['OutputImg'])
         acc_dir = None
@@ -146,7 +146,7 @@ class NVS_Solver(object):
             self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
                                    acc_dir[acc].data.cpu().numpy(),
                                    idx)
-        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["psnr"] # could also use acc_dir["ssim"]
+        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["psnr"].data.cpu().numpy() # could also use acc_dir["ssim"]
 
     def visualize_output(self, output, take_slice=None, tag="image"):
         """

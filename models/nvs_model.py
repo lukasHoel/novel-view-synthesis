@@ -15,6 +15,12 @@ class NovelViewSynthesisModel(nn.Module):
                  enc_blk_types=["id", "id", "id"],
                  dec_dims=[32, 64, 32, 16, 3],
                  dec_blk_types=["id", "avg", "ups", "id"],
+                 points_per_pixel=8,
+                 learn_feature=True,
+                 radius=1.5,
+                 rad_pow=2,
+                 accumulation='alphacomposite',
+                 accumulation_tau=1,
                  use_rgb_features=False,
                  use_gt_depth=False,
                  use_inverse_depth=False,
@@ -23,12 +29,24 @@ class NovelViewSynthesisModel(nn.Module):
 
         # PARAMETERS
         self.imageSize = imageSize
+
+        # for depth regressor
         self.max_z = max_z
         self.min_z = min_z
+
+        # for enc/dec
         self.enc_dims = enc_dims
         self.enc_blk_types = enc_blk_types
         self.dec_dims = dec_dims
         self.dec_blk_types = dec_blk_types
+
+        # for projection
+        self.points_per_pixel = points_per_pixel
+        self.learn_feature = learn_feature
+        self.radius = radius
+        self.rad_pow = rad_pow
+        self.accumulation = accumulation
+        self.accumulation_tau = accumulation_tau
 
         # CONTROLS
         self.use_rgb_features = use_rgb_features
@@ -53,21 +71,35 @@ class NovelViewSynthesisModel(nn.Module):
 
         # 3D Points transformer
         if self.use_rgb_features:
-            self.pts_transformer = PtsManipulator(imageSize, C=3)
+            self.pts_transformer = PtsManipulator(imageSize=imageSize,
+                                                  C=3,
+                                                  learn_feature=self.learn_feature,
+                                                  radius=self.radius,
+                                                  rad_pow=self.rad_pow,
+                                                  accumulation=self.accumulation,
+                                                  accumulation_tau=self.accumulation_tau,
+                                                  points_per_pixel=self.points_per_pixel)
         else:
-            self.pts_transformer = PtsManipulator(imageSize, C=self.enc_dims[-1])
+            self.pts_transformer = PtsManipulator(imageSize=imageSize,
+                                                  C=self.enc_dims[-1],
+                                                  learn_feature=self.learn_feature,
+                                                  radius=self.radius,
+                                                  rad_pow=self.rad_pow,
+                                                  accumulation=self.accumulation,
+                                                  accumulation_tau=self.accumulation_tau,
+                                                  points_per_pixel=self.points_per_pixel)
 
         # DECODER
         # REFINEMENT NETWORK
-        # what if use_rgb_features? Then dims need to be different! Hardcode them in that case!
+
         if self.use_rgb_features:
-            self.projector = RefineNet(res_block_dims=[3,8,16,8,3],
-                                       res_block_types=["id"] * 4, # todo better way of doing it?
-                                       activate_out=nn.Tanh())
-        else:
-            self.projector = RefineNet(res_block_dims=self.dec_dims,
-                                       res_block_types=self.dec_blk_types,
-                                       activate_out=nn.Tanh())
+            # what if use_rgb_features? Then dims need to be different! Hardcode them in that case!
+            self.dec_dims[0] = 3
+            self.dec_dims[-1] = 3
+
+        self.projector = RefineNet(res_block_dims=self.dec_dims,
+                                   res_block_types=self.dec_blk_types,
+                                   activate_out=nn.Tanh())
 
 
         # TODO WHERE IS THIS NEEDED?
@@ -111,7 +143,8 @@ class NovelViewSynthesisModel(nn.Module):
             else:
                 # Use the inverse for datasets with landscapes, where there
                 # is a long tail on the depth distribution
-                regressed_pts = 1. / regressed_pts * 10 + 0.01 # todo why these values?
+                #regressed_pts = 1. / regressed_pts * 10 + 0.01 # todo why these values?
+                regressed_pts = 1. / regressed_pts * self.max_z + self.min_z
         else:
             if depth_img is None:
                 raise ValueError("depth_img must not be None when using gt_depth")

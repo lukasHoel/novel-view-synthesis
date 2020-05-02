@@ -32,13 +32,13 @@ class RasterizePointsXYsBlending(nn.Module):
 
     def __init__(
         self,
-        C=64,
+        C,
+        size,
         learn_feature=True,
         radius=1.5,
         rad_pow=2,
         accumulation_tau=1,
         accumulation='alphacomposite',
-        size=256,
         points_per_pixel=8,
     ):
         super().__init__()
