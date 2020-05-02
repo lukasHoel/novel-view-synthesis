@@ -38,7 +38,13 @@ class ICLNUIMDataset(Dataset):
     # regex to read lines from the camera .txt file
     cam_pattern = "(?P<id>.*\w).*= \[(?P<x>.*), (?P<y>.*), (?P<z>.*)\].*"
 
-    def __init__(self, path, depth_to_image_plane=True, sampleOutput=True, RTrelativeToOutput=True, transform=None):
+    def __init__(self,
+                 path,
+                 depth_to_image_plane=True,
+                 sampleOutput=True,
+                 RTrelativeToOutput=True,
+                 inverse_depth=False,
+                 transform=None):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
@@ -47,10 +53,12 @@ class ICLNUIMDataset(Dataset):
                 neighborhood is currently defined as: select uniformly at random any camera in the range [index-30, index+30) where index is the accessed item index.
                 For example: If the 500. item is accessed, the second camera pose (R|T) will be from any of the poses of the items 470-530 (excluding 500).
         :param RTrelativeToOutput: when sampleOutput=true, then this option will calculate relativ RT between cam1 and cam2 and return that as RT2. RT1 will be the identity.
+        :param inverse_depth: If true, depth.pow(-1) is returned for the depth file (changing depth BEFORE applying transform object).
         :param transform: transform that should be applied to the input image AND the target depth
         '''
         self.transform = transform
         self.depth_to_image_plane = depth_to_image_plane
+        self.inverse_depth = inverse_depth
         self.path = path
 
         self.img = sorted([f for f in os.listdir(path) if f.endswith('.png')])
@@ -73,6 +81,9 @@ class ICLNUIMDataset(Dataset):
             # convert to image plane depth by taking into account the position in the WxH array as (x, y)
             if self.depth_to_image_plane:
                 depth = np.fromfunction(lambda x, y: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
+
+            if self.inverse_depth:
+                depth = np.power(depth, -1)
         return depth
 
     def load_cam(self, idx):
@@ -247,7 +258,7 @@ class ICLNUIMDataset(Dataset):
         if self.transform:
             sample['image'] = self.transform(sample['image'])
             sample['depth'] = self.transform(sample['depth'])
-            sample['depth'] = sample['depth'].pow_(-1)
+            sample['depth'] = self.transform(sample['depth'])
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
 
@@ -267,7 +278,8 @@ def test():
     dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop",
                              depth_to_image_plane=True,
                              sampleOutput=True,
-                             RTrelativeToOutput=False)
+                             RTrelativeToOutput=False,
+                             inverse_depth=True)
     #dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleOutput=True);
 
     print("Length of dataset: {}".format(len(dataset)))
