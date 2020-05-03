@@ -32,6 +32,7 @@ def default_batch_loader(batch):
     output_RT_inv = batch['cam']['RT2inv']
     gt_img = batch['output']['image'] if batch['output'] is not None else None
     depth_img = batch['depth']
+
     return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, depth_img
 
 # NOTE: Unused, might be used for debugging

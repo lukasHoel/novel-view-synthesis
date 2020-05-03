@@ -205,6 +205,9 @@ class ICLNUIMDataset(Dataset):
             if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
                 output_idx = idx+1 if idx < self.size-1 else idx-1
 
+            # todo remove
+            output_idx = idx+30
+
             # load image of new index
             output_image = self.load_image(output_idx)
 
@@ -229,7 +232,7 @@ class ICLNUIMDataset(Dataset):
                 # RTinv
                 #RTinv = np.linalg.inv(RT).astype(np.float32)
                 RTinv = invert_RT(RT[:3,:])
-                RTinv = np.vstack([RTinv, [0, 0, 0, 1]])  # if (0 0 0 1) row is needed
+                RTinv = np.vstack([RTinv, [0, 0, 0, 1]]).astype(np.float32)  # if (0 0 0 1) row is needed
                 identity = torch.eye(4)
                 RTinv = torch.from_numpy(RTinv)
 
@@ -267,14 +270,27 @@ class ICLNUIMDataset(Dataset):
         return self.size
 
     def toImagePlane(self, depth, x, y):
+
+        # taken from the figure in: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
+        #z = ICLNUIMDataset.cam_K['fx'] * np.sqrt( (depth**2) / (x**2 + y**2 + ICLNUIMDataset.cam_K['fx']**2))
+
+
         # taken from the c++ code implementation at https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html in file VaFRIC.cpp#getEuclidean2PlanarDepth
         x_plane = (x - ICLNUIMDataset.cam_K['cx']) / ICLNUIMDataset.cam_K['fx']
         y_plane = (y - ICLNUIMDataset.cam_K['cy']) / ICLNUIMDataset.cam_K['fy']
-        return depth / np.sqrt(x_plane ** 2 + y_plane ** 2 + 1)
+        z = depth / np.sqrt(x_plane ** 2 + y_plane ** 2 + 1)
 
+        return z
+
+def getEulerAngles(R):
+    ry = np.arcsin(R[0,2])
+    rz = np.arccos(R[0,0] / np.cos(ry))
+    rx = np.arccos(R[2,2] / np.cos(ry))
+
+    return rx, ry, rz
 
 def test():
-    dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop",
+    dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop",
                              depth_to_image_plane=True,
                              sampleOutput=True,
                              RTrelativeToOutput=False,
@@ -284,11 +300,16 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    i = 0
+    i = 400
     item = dataset.__getitem__(i)
 
+    print(item["image"].shape)
+    print(item["depth"].shape)
+
     print("RT1:\n{}". format(item['cam']['RT1']))
+    print("RT1 euler angles in radians: {}".format(getEulerAngles(item['cam']['RT1'])))
     print("RT2:\n{}".format(item['cam']['RT2']))
+    print("RT2 euler angles in radians: {}".format(getEulerAngles(item['cam']['RT2'])))
     print("K:\n{}".format(item['cam']['K']))
 
     print("RT1inv:\n{}". format(item['cam']['RT1inv']))

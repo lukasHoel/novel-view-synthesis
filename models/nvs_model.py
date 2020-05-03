@@ -173,7 +173,7 @@ class NovelViewSynthesisModel(nn.Module):
                 raise ValueError("depth_img must not be None when using gt_depth")
             regressed_pts = depth_img
 
-        #img_features.requires_grad = True # use when no other network is used, but backprop should still work (even though doing nothing).
+        img_features.requires_grad = True # use when no other network is used, but backprop should still work (even though doing nothing).
 
         # APPLY TRANSFORMATION and REPROJECT
         transformed_img_features = self.pts_transformer.forward_justpts(
@@ -194,8 +194,8 @@ class NovelViewSynthesisModel(nn.Module):
         '''
 
         # DECODE IMAGE
-        transformed_img = self.projector(transformed_img_features)
-        #transformed_img = transformed_img_features # use this when refinement network should not be used
+        #transformed_img = self.projector(transformed_img_features)
+        transformed_img = transformed_img_features # use this when refinement network should not be used
 
         #print(transformed_img.shape)
         #print(torch.min(transformed_img))
