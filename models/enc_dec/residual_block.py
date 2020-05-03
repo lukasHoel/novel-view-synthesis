@@ -137,7 +137,7 @@ class bn(nn.Module):
 # for the BatchNorm layers of the block. The bias projections are zero-centered, while the gain 
 # projections are centered at 1.
 class LinearNoiseLayer(nn.Module):
-    def __init__(self, noise_sz=20, output_sz=32):
+    def __init__(self, noise_sz=20, output_sz=32, spectral_norm=True):
         """
         Class for adding in noise to the batch normalisation layer.
         Based on the idea from BigGAN.
@@ -145,8 +145,8 @@ class LinearNoiseLayer(nn.Module):
         super().__init__()
         self.noise_sz = noise_sz
 
-        self.gain = get_linear_layer(noise_sz, output_sz, bias=False, spectral_norm=True)
-        self.bias = get_linear_layer(noise_sz, output_sz, bias=False, spectral_norm=True)
+        self.gain = get_linear_layer(noise_sz, output_sz, bias=False, spectral_norm=spectral_norm)
+        self.bias = get_linear_layer(noise_sz, output_sz, bias=False, spectral_norm=spectral_norm)
 
         self.bn = bn(output_sz)
 
@@ -174,7 +174,25 @@ class ResidualBlock(nn.Module):
     Based on ResNet_Block in blocks.py
     See Appendix B and fig. 14 in SynSin paper.
     '''
-    def __init__(self, in_ch, out_ch, block_type, noisy_bn=True):
+    def __init__(self, 
+                 in_ch, 
+                 out_ch, 
+                 block_type, 
+                 noisy_bn=True, 
+                 spectral_norm=True):
+        '''
+        :param in_ch: NVS image outputted from the generator
+            input depth channel of the ResNet block
+        :param out_ch: GT image for the novel view
+            output depth channel of this ResNet block
+        :param block_type:
+            One of the following: "id", "ups", "avg"
+        :param noisy_bn:
+            boolean flag to determine whether to inject noise to batch norm (BN) or not
+            noise in BN models ambiguity in the inpainting task
+        :param spectral_norm
+            boolean flag to determine whether to use spectral norm or not
+        '''
         super().__init__()
 
         # variable_layer is the layer defining the type of the residual block. It can be:
@@ -184,24 +202,24 @@ class ResidualBlock(nn.Module):
         if block_type not in block_types.keys():
             raise "ResidualBlock: Wrong block type!"
 
-        self.BN1 = LinearNoiseLayer(output_sz=in_ch) if noisy_bn else nn.BatchNorm2d(in_ch)
+        self.BN1 = LinearNoiseLayer(output_sz=in_ch, spectral_norm=spectral_norm) if noisy_bn else nn.BatchNorm2d(in_ch)
 
-        self.BN2 = LinearNoiseLayer(output_sz=out_ch) if noisy_bn else nn.BatchNorm2d(out_ch)
+        self.BN2 = LinearNoiseLayer(output_sz=out_ch, spectral_norm=spectral_norm) if noisy_bn else nn.BatchNorm2d(out_ch)
 
         self.variable_layer = block_types[block_type]
 
         self.left_branch = nn.Sequential(
-            get_conv2D_layer(in_ch, out_ch, kernel_size=(1,1), padding=0, stride=1, spectral_norm=True),
+            get_conv2D_layer(in_ch, out_ch, kernel_size=(1,1), padding=0, stride=1, spectral_norm=spectral_norm),
             self.variable_layer
         )
 
         self.right_branch = nn.Sequential(
             self.BN1,
             nn.ReLU(),
-            get_conv2D_layer(in_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=True),
+            get_conv2D_layer(in_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=spectral_norm),
             self.BN2,
             nn.ReLU(),
-            get_conv2D_layer(out_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=True),
+            get_conv2D_layer(out_ch, out_ch, kernel_size=(3,3), padding=1, stride=1, spectral_norm=spectral_norm),
             self.variable_layer
         )
 

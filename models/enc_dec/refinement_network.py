@@ -6,7 +6,12 @@ class RefineNet(nn.Module):
     Based on ResNetDecoder in architectures.py
     See Appendix B and fig. 15(b) in SynSin paper.
     '''
-    def __init__(self, res_block_dims=[], res_block_types=[], activate_out=nn.Sigmoid(), noisy_bn=True):
+    def __init__(self, 
+                 res_block_dims=[], 
+                 res_block_types=[], 
+                 activate_out=nn.Sigmoid(), 
+                 noisy_bn=True, 
+                 spectral_norm=True):
         '''
         Let n-many ResNet blocks, res_block_dims include n+1 elements 
         to specify input and output channels for each block.
@@ -20,7 +25,8 @@ class RefineNet(nn.Module):
                     in_ch=res_block_dims[i],
                     out_ch=res_block_dims[i+1],
                     block_type=res_block_types[i],
-                    noisy_bn=noisy_bn
+                    noisy_bn=noisy_bn,
+                    spectral_norm=spectral_norm
                 )
             )
         self.res_blocks = nn.Sequential(*self.res_blocks)
