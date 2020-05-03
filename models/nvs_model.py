@@ -9,20 +9,33 @@ from models.enc_dec.refinement_network import RefineNet
 class NovelViewSynthesisModel(nn.Module):
     def __init__(self,
                  imageSize,
+
+                 # depth
                  max_z=0,
                  min_z=0,
+
+                 #enc
                  enc_dims=[3, 8, 16, 32],
                  enc_blk_types=["id", "id", "id"],
+                 enc_noisy_bn=True,
+                 enc_spectral_norm=True,
+
+                 #dec
                  dec_dims=[32, 64, 32, 16, 3],
                  dec_blk_types=["id", "avg", "ups", "id"],
                  dec_activation_func=nn.Sigmoid(),
                  dec_noisy_bn=True,
+                 dec_spectral_norm=True,
+
+                 # project
                  points_per_pixel=8,
                  learn_feature=True,
                  radius=1.5,
                  rad_pow=2,
                  accumulation='alphacomposite',
                  accumulation_tau=1,
+
+                 # controls
                  use_rgb_features=False,
                  use_gt_depth=False,
                  use_inverse_depth=False,
@@ -39,10 +52,14 @@ class NovelViewSynthesisModel(nn.Module):
         # for enc/dec
         self.enc_dims = enc_dims
         self.enc_blk_types = enc_blk_types
+        self.enc_noisy_bn = enc_noisy_bn
+        self.enc_spectral_norm = enc_spectral_norm
+
         self.dec_dims = dec_dims
         self.dec_blk_types = dec_blk_types
         self.dec_activation_func = dec_activation_func
         self.dec_noisy_bn = dec_noisy_bn
+        self.dec_spectral_norm = dec_spectral_norm
 
         # for projection
         self.points_per_pixel = points_per_pixel
