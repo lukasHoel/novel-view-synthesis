@@ -16,6 +16,7 @@ class NovelViewSynthesisModel(nn.Module):
                  dec_dims=[32, 64, 32, 16, 3],
                  dec_blk_types=["id", "avg", "ups", "id"],
                  dec_activation_func=nn.Sigmoid(),
+                 dec_noisy_bn=True,
                  points_per_pixel=8,
                  learn_feature=True,
                  radius=1.5,
@@ -41,6 +42,7 @@ class NovelViewSynthesisModel(nn.Module):
         self.dec_dims = dec_dims
         self.dec_blk_types = dec_blk_types
         self.dec_activation_func = dec_activation_func
+        self.dec_noisy_bn = dec_noisy_bn
 
         # for projection
         self.points_per_pixel = points_per_pixel
@@ -101,7 +103,8 @@ class NovelViewSynthesisModel(nn.Module):
 
         self.projector = RefineNet(res_block_dims=self.dec_dims,
                                    res_block_types=self.dec_blk_types,
-                                   activate_out=self.dec_activation_func)
+                                   activate_out=self.dec_activation_func,
+                                   noisy_bn=self.dec_noisy_bn)
                                    #activate_out=nn.Tanh())
 
 
@@ -177,11 +180,16 @@ class NovelViewSynthesisModel(nn.Module):
         transformed_img = self.projector(transformed_img_features)
         #transformed_img = transformed_img_features # use this when refinement network should not be used
 
+        #print(transformed_img.shape)
+        #print(torch.min(transformed_img))
+        #print(torch.max(transformed_img))
+
         # NORMALIZE IMAGES
         # Output of projector (refinement_network) is tanh --> [-1,1] so transform it to [0,1] here
         if self.normalize_images:
-            input_img = 0.5 * input_img + 0.5
-            gt_img = 0.5 * gt_img + 0.5 # TODO But do I need to modify input_img and gt_img for this step???
+            print("Normalize image")
+            #input_img = 0.5 * input_img + 0.5
+            #gt_img = 0.5 * gt_img + 0.5 # TODO But do I need to modify input_img and gt_img for this step???
             transformed_img = 0.5 * transformed_img + 0.5
 
         return {
