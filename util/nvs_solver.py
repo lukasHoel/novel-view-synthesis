@@ -112,6 +112,8 @@ class NVS_Solver(object):
                             'weight_decay': self.optim_args['weight_decay'],
                             **extra_args}
 
+        self.hparam_dict = {'foo': 1.0}
+
         print("Hyperparameters of this solver: {}".format(self.hparam_dict))
 
         self._reset_histories()
