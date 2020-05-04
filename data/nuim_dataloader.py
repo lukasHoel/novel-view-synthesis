@@ -41,8 +41,9 @@ class ICLNUIMDataset(Dataset):
     def __init__(self,
                  path,
                  depth_to_image_plane=True,
+                 use_real_intrinsics=False,
                  sampleOutput=True,
-                 RTrelativeToOutput=True,
+                 RTrelativeToOutput=False,
                  inverse_depth=False,
                  transform=None):
         '''
@@ -55,9 +56,11 @@ class ICLNUIMDataset(Dataset):
         :param RTrelativeToOutput: when sampleOutput=true, then this option will calculate relativ RT between cam1 and cam2 and return that as RT2. RT1 will be the identity.
         :param inverse_depth: If true, depth.pow(-1) is returned for the depth file (changing depth BEFORE applying transform object).
         :param transform: transform that should be applied to the input image AND the target depth
+        :param use_real_intrinsics: If true, return the K and Kinv matrix from ICL dataset. If false return identity matrix.
         '''
         self.transform = transform
         self.depth_to_image_plane = depth_to_image_plane
+        self.use_real_intrinsics = use_real_intrinsics
         self.inverse_depth = inverse_depth
         self.path = path
 
@@ -190,8 +193,8 @@ class ICLNUIMDataset(Dataset):
         cam = {
             'RT1': torch.from_numpy(RT1),
             'RT1inv': torch.from_numpy(RT1inv),
-            'K': ICLNUIMDataset.K,
-            'Kinv': ICLNUIMDataset.Kinv
+            'K': ICLNUIMDataset.K if self.use_real_intrinsics else torch.eye(4),
+            'Kinv': ICLNUIMDataset.Kinv if self.use_real_intrinsics else torch.eye(4)
         }
 
         output = None
@@ -205,9 +208,6 @@ class ICLNUIMDataset(Dataset):
             if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
                 output_idx = idx+1 if idx < self.size-1 else idx-1
 
-            # todo remove
-            output_idx = idx+30
-
             # load image of new index
             output_image = self.load_image(output_idx)
 
@@ -217,12 +217,14 @@ class ICLNUIMDataset(Dataset):
             if self.RTrelativeToOutput:
                 #calculate relative RT matrix
                 R1 = RT1[:, :3]
-                T1 = RT1[:, 3]
+                T1 = RT1[:3, 3]
                 R2 = RT2[:, :3]
-                T2 = RT2[:, 3]
+                T2 = RT2[:3, 3]
 
                 # RT
-                T = R2.T.dot(T1 - T2)/50. # /50 proved to work for the ICL dataset... do not know why, but it works!
+                print(T1.shape)
+                print((T1-T2).shape)
+                T = (R2.T@R1).dot(T1 - T2)/50. # /50 proved to work for the ICL dataset... do not know why, but it works!
                 RT = np.eye(4)
                 RT[0:3, 0:3] = R2.T @ R1
                 RT[:3, 3] = T

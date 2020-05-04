@@ -97,6 +97,7 @@ class PtsManipulator(nn.Module):
         sampler = sampler * torch.Tensor([1, -1, -1]).unsqueeze(0).unsqueeze(2).to(sampler.device)
 
         # Normalize x and y to [-1,1] range
+        '''
         min_x = torch.min(sampler[:, 0, :], dim=1)
         #print("MIN_X: ", min_x)
         max_x = torch.max(sampler[:, 0, :], dim=1)
@@ -116,6 +117,7 @@ class PtsManipulator(nn.Module):
         #print("MIN_Y: ", min_y)
         #max_y = torch.max(sampler[:, 1, :], dim=1)
         #print("MAX_Y: ", max_y)
+        '''
 
         # normalize z to [0,1]
         '''
