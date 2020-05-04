@@ -112,8 +112,6 @@ class NVS_Solver(object):
                             'weight_decay': self.optim_args['weight_decay'],
                             **extra_args}
 
-        self.hparam_dict = {'foo': 1.0}
-
         print("Hyperparameters of this solver: {}".format(self.hparam_dict))
 
         self._reset_histories()
@@ -222,7 +220,10 @@ class NVS_Solver(object):
             test_accs = []
             for i, sample in enumerate(tqdm(test_loader)):
                 loss_dir, output, test_acc_dir = self.forward_pass(model, sample)
-                loss, test_acc = self.log_loss_and_acc(loss_dir, test_acc_dir, test_name, i)
+                loss, test_acc = self.log_loss_and_acc(loss_dir,
+                                                       test_acc_dir,
+                                                       test_name,
+                                                       i)
                 test_losses.append(loss)
                 test_accs.append(test_acc)
 
@@ -281,7 +282,10 @@ class NVS_Solver(object):
                 self.backward_pass(train_loss_dir, optim)
 
                 # LOGGING of loss and accuracy
-                train_loss, train_acc = self.log_loss_and_acc(train_loss_dir, train_acc_dir, 'Train/', i)
+                train_loss, train_acc = self.log_loss_and_acc(train_loss_dir,
+                                                              train_acc_dir,
+                                                              'Train/',
+                                                              epoch*iter_per_epoch + i)
                 train_losses.append(train_loss)
                 train_accs.append(train_acc)
 
@@ -315,7 +319,10 @@ class NVS_Solver(object):
                 for i, sample in enumerate(tqdm(val_loader)):
                     # FORWARD PASS --> Loss + acc calculation
                     val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
-                    val_loss, val_acc = self.log_loss_and_acc(val_loss_dir, val_acc_dir, 'Val/', i)
+                    val_loss, val_acc = self.log_loss_and_acc(val_loss_dir,
+                                                              val_acc_dir,
+                                                              'Val/',
+                                                              epoch*iter_per_epoch + i)
                     val_losses.append(val_loss)
                     val_accs.append(val_acc)
 
