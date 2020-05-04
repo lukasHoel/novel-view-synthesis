@@ -163,8 +163,10 @@ class NVS_Solver(object):
         ----------
         output: batch of data, containing input, target, prediction and depth image
         take_slice: two element tuple or list can be specified to take a slice of the batch (default: take whole batch)
+        tag: used for grouping images on tensorboard. e.g. "train", "val", "test" etc.
+        step: used for stamping epoch or iteration
         """
-        # TODO: input_batch and depth_batch are ignored for the moment, however, they can also be integrated later on
+        # TODO: depth_batch is ignored for the moment, however, if needed, it can also be integrated later on
         input_batch, target_batch, pred_batch, depth_batch = output["InputImg"].cpu(),\
                                                              output["OutputImg"].cpu(),\
                                                              output["PredImg"].cpu(),\
@@ -172,8 +174,9 @@ class NVS_Solver(object):
         with torch.no_grad():
             # In case of a single image add one dimension to the beginning to create single image batch
             if len(pred_batch.shape) == 3:
-                pred_batch = pred_batch.unsqueeze(0)
+                input_batch = input_batch.unsqueeze(0)
                 target_batch = target_batch.unsqueeze(0)
+                pred_batch = pred_batch.unsqueeze(0)
             
             if len(pred_batch.shape) != 4:
                 print("Only 3D or 4D tensors can be visualized")
@@ -181,19 +184,23 @@ class NVS_Solver(object):
 
             # If slice specified, take a portion of the batch
             if take_slice and (type(take_slice) in (list, tuple)) and (len(take_slice) == 2):
-                pred_batch = pred_batch[take_slice[0], take_slice[1]]
+                input_batch = input_batch[take_slice[0], take_slice[1]]
                 target_batch = target_batch[take_slice[0], take_slice[1]]
+                pred_batch = pred_batch[take_slice[0], take_slice[1]]
                 
-            # Store vstack of images: [pred_batch0, target_batch0, ...].T on img_lst
+            # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
             img_lst = torch.Tensor()
 
-            # Run a loop to interleave images in pred_batch and target_batch batches
+            # Run a loop to interleave images in input_batch, target_batch, pred_batch batches
             for i in range(pred_batch.shape[0]):
-                # Each iteration: Pick pred_batch and its target_batch 
-                # (we need to extend the dimension of pred_batch and target_batch images with .unsqueeze(0))
-                img_lst = torch.cat((img_lst, pred_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0)), dim=0)
+                # Each iteration pick input image and corresponding target & pred images
+                # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
+                # Order in img_list defines the layout. 
+                # Current layout: input - target - pred at each row
+                img_lst = torch.cat((img_lst, input_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0), pred_batch[i].unsqueeze(0)), dim=0)
             
-            img_grid = make_grid(img_lst, nrow=2) # Per row, pick two images from the stack # TODO: this idea can be extended, we can even parametrize this
+            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack 
+            # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
             self.writer.add_image(tag, img_grid, global_step=step) # NOTE: add_image method expects image values in range [0,1]
