@@ -294,6 +294,7 @@ def getEulerAngles(R):
 def test():
     dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop",
                              depth_to_image_plane=True,
+                             use_real_intrinsics=False,
                              sampleOutput=True,
                              RTrelativeToOutput=False,
                              inverse_depth=False)
@@ -339,7 +340,7 @@ def test():
     plt.title("Output Image " + str(out_idx))
     plt.imshow(out_img)
 
-    plt.show()
+    #plt.show()
 
 
 if __name__ == "__main__":
