@@ -202,7 +202,7 @@ class GAN_Wrapper_Solver(object):
                 val_losses = []
                 val_accs = []
                 val_minibatches = val_loader
-                    if tqdm_mode == 'epoch':
+                if tqdm_mode == 'epoch':
                     val_minibatches = tqdm(val_minibatches)
                 for i, sample in enumerate(val_minibatches):
 
