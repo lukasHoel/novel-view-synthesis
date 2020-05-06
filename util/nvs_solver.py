@@ -377,9 +377,9 @@ class NVS_Solver(object):
                         self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
         self.writer.add_hparams(self.hparam_dict, {
-            'HParam/Accuracy/Val': self.val_acc_history[-1],
+            'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,
             'HParam/Accuracy/Train': self.train_acc_history[-1],
-            'HParam/Loss/Val': self.val_loss_history[-1],
+            'HParam/Loss/Val': self.val_loss_history[-1] if len(val_loader) > 0 else 0,
             'HParam/Loss/Train': self.train_loss_history[-1]
         })
         self.writer.flush()
