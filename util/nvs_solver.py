@@ -228,7 +228,7 @@ class NVS_Solver(object):
                 test_accs.append(test_acc)
 
                 # Print loss every log_nth iteration
-                if (i % log_nth == 0):
+                if log_nth != 0 and i % log_nth == 0:
                     print("[Iteration {cur}/{max}] TEST loss: {loss}".format(cur=i + 1,
                                                                               max=len(test_loader),
                                                                               loss=loss))
@@ -248,16 +248,28 @@ class NVS_Solver(object):
         optim.step()
         optim.zero_grad()
 
-    def train(self, model, train_loader, val_loader, num_epochs=10, log_nth=0):
+    def train(self,
+              model,
+              train_loader,
+              val_loader,
+              num_epochs=10,
+              log_nth_iter=1,
+              log_nth_epoch=1,
+              tqdm_mode='total'):
         """
         Train a given model with the provided data.
 
         Inputs:
-        - model: model object initialized from a torch.nn.Module
-        - train_loader: train data in torch.utils.data.DataLoader
-        - val_loader: val data in torch.utils.data.DataLoader
-        - num_epochs: total number of training epochs
-        - log_nth: log training accuracy and loss every nth iteration
+        :param model: nvs_model object initialized from nvs_model.py
+        :param train_loader: train data in torch.utils.data.DataLoader
+        :param val_loader: val data in torch.utils.data.DataLoader
+        :param num_epochs: total number of training epochs
+        :param log_nth_iter: log training accuracy and loss every nth iteration. Default 1: meaning "Log everytime", 0 means "never log"
+        :param log_nth_epoch: log training accuracy and loss every nth epoch. Default 1: meaning "Log everytime", 0 means "never log"
+        :param tqdm_mode:
+                'total': tqdm log how long all epochs will take,
+                'epoch': tqdm for each epoch how long it will take,
+                anything else, e.g. None: do not use tqdm
         """
         optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()), **self.optim_args)
         self._reset_histories()
@@ -268,11 +280,18 @@ class NVS_Solver(object):
         print('START TRAIN on device: {}'.format(device))
 
         #start = time()
-        for epoch in range(num_epochs):  # for every epoch...
+        epochs = range(num_epochs)
+        if tqdm_mode == 'total':
+            epochs = tqdm(range(num_epochs))
+        for epoch in epochs:  # for every epoch...
             model.train()  # TRAINING mode (for dropout, batchnorm, etc.)
             train_losses = []
             train_accs = []
-            for i, sample in enumerate(tqdm(train_loader)):  # for every minibatch in training set
+
+            train_minibatches = train_loader
+            if tqdm_mode == 'epoch':
+                train_minibatches = tqdm(train_minibatches)
+            for i, sample in enumerate(train_minibatches):  # for every minibatch in training set
                 # FORWARD PASS --> Loss + acc calculation
                 #print("Time until next forward pass (loading from dataloader + backward pass) took: {}".format(time() - start))
                 train_loss_dir, train_output, train_acc_dir = self.forward_pass(model, sample)
@@ -290,7 +309,7 @@ class NVS_Solver(object):
                 train_accs.append(train_acc)
 
                 # Print loss every log_nth iteration
-                if (i % log_nth == 0):
+                if log_nth_iter != 0 and i % log_nth_iter == 0:
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
@@ -306,17 +325,22 @@ class NVS_Solver(object):
             self.writer.add_scalar('Epoch/Loss/Train', mean_train_loss, epoch)
             self.writer.add_scalar('Epoch/Accuracy/Train', mean_train_acc, epoch)
 
-            print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                 max=num_epochs,
-                                                                                 acc=mean_train_acc,
-                                                                                 loss=mean_train_loss))
+            if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                     max=num_epochs,
+                                                                                     acc=mean_train_acc,
+                                                                                     loss=mean_train_loss))
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
             model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
             with torch.no_grad():
                 val_losses = []
                 val_accs = []
-                for i, sample in enumerate(tqdm(val_loader)):
+
+                val_minibatches = train_loader
+                if tqdm_mode == 'epoch':
+                    val_minibatches = tqdm(val_minibatches)
+                for i, sample in enumerate(val_minibatches):
                     # FORWARD PASS --> Loss + acc calculation
                     val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
                     val_loss, val_acc = self.log_loss_and_acc(val_loss_dir,
@@ -327,7 +351,7 @@ class NVS_Solver(object):
                     val_accs.append(val_acc)
 
                     # Print loss every log_nth iteration
-                    if (i % log_nth == 0):
+                    if log_nth_iter != 0 and i % log_nth_iter == 0:
                         print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                 max=len(val_loader),
                                                                                 loss=val_loss))
@@ -343,10 +367,11 @@ class NVS_Solver(object):
                 self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
                 self.writer.flush()
 
-                print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                   max=num_epochs,
-                                                                                   acc=mean_val_acc,
-                                                                                   loss=mean_val_loss))
+                if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                    print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                       max=num_epochs,
+                                                                                       acc=mean_val_acc,
+                                                                                       loss=mean_val_loss))
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1],
