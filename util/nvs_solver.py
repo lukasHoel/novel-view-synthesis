@@ -333,47 +333,48 @@ class NVS_Solver(object):
                 self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
-            model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
-            with torch.no_grad():
-                val_losses = []
-                val_accs = []
+            if len(val_loader) > 0:
+                model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
+                with torch.no_grad():
+                    val_losses = []
+                    val_accs = []
 
-                val_minibatches = val_loader
-                if tqdm_mode == 'epoch':
-                    val_minibatches = tqdm(val_minibatches)
-                for i, sample in enumerate(val_minibatches):
-                    # FORWARD PASS --> Loss + acc calculation
-                    val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
-                    val_loss, val_acc = self.log_loss_and_acc(val_loss_dir,
-                                                              val_acc_dir,
-                                                              'Val/',
-                                                              epoch*len(val_minibatches) + i)
-                    val_losses.append(val_loss)
-                    val_accs.append(val_acc)
+                    val_minibatches = val_loader
+                    if tqdm_mode == 'epoch':
+                        val_minibatches = tqdm(val_minibatches)
+                    for i, sample in enumerate(val_minibatches):
+                        # FORWARD PASS --> Loss + acc calculation
+                        val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
+                        val_loss, val_acc = self.log_loss_and_acc(val_loss_dir,
+                                                                  val_acc_dir,
+                                                                  'Val/',
+                                                                  epoch*len(val_minibatches) + i)
+                        val_losses.append(val_loss)
+                        val_accs.append(val_acc)
 
-                    # Print loss every log_nth iteration
-                    if log_nth_iter != 0 and i % log_nth_iter == 0:
-                        print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
-                                                                                max=len(val_loader),
-                                                                                loss=val_loss))
+                        # Print loss every log_nth iteration
+                        if log_nth_iter != 0 and i % log_nth_iter == 0:
+                            print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
+                                                                                    max=len(val_loader),
+                                                                                    loss=val_loss))
+                            self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
+
+                    mean_val_loss = np.mean(val_losses)
+                    mean_val_acc = np.mean(val_accs)
+
+                    self.val_loss_history.append(mean_val_loss)
+                    self.val_acc_history.append(mean_val_acc)
+
+                    self.writer.add_scalar('Epoch/Loss/Val', mean_val_loss, epoch)
+                    self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
+                    self.writer.flush()
+
+                    if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                        print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                           max=num_epochs,
+                                                                                           acc=mean_val_acc,
+                                                                                           loss=mean_val_loss))
                         self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
-
-                mean_val_loss = np.mean(val_losses)
-                mean_val_acc = np.mean(val_accs)
-
-                self.val_loss_history.append(mean_val_loss)
-                self.val_acc_history.append(mean_val_acc)
-
-                self.writer.add_scalar('Epoch/Loss/Val', mean_val_loss, epoch)
-                self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
-                self.writer.flush()
-
-                if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
-                    print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                       max=num_epochs,
-                                                                                       acc=mean_val_acc,
-                                                                                       loss=mean_val_loss))
-                    self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1],
