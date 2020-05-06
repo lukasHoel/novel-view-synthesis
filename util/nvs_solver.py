@@ -313,7 +313,7 @@ class NVS_Solver(object):
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
-                    self.visualize_output(train_output, tag="train", step=i)
+                    self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
@@ -330,6 +330,7 @@ class NVS_Solver(object):
                                                                                      max=num_epochs,
                                                                                      acc=mean_train_acc,
                                                                                      loss=mean_train_loss))
+                self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
             model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
@@ -355,7 +356,7 @@ class NVS_Solver(object):
                         print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                 max=len(val_loader),
                                                                                 loss=val_loss))
-                        self.visualize_output(val_output, tag="val", step=i)
+                        self.visualize_output(val_output, tag="val", step=epoch*iter_per_epoch + i)
 
                 mean_val_loss = np.mean(val_losses)
                 mean_val_acc = np.mean(val_accs)
@@ -372,6 +373,7 @@ class NVS_Solver(object):
                                                                                        max=num_epochs,
                                                                                        acc=mean_val_acc,
                                                                                        loss=mean_val_loss))
+                    self.visualize_output(val_output, tag="val", step=epoch*iter_per_epoch + i)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1],
