@@ -347,7 +347,7 @@ class NVS_Solver(object):
                     val_loss, val_acc = self.log_loss_and_acc(val_loss_dir,
                                                               val_acc_dir,
                                                               'Val/',
-                                                              epoch*iter_per_epoch + i)
+                                                              epoch*len(val_minibatches) + i)
                     val_losses.append(val_loss)
                     val_accs.append(val_acc)
 
