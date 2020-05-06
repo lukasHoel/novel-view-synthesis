@@ -356,7 +356,7 @@ class NVS_Solver(object):
                         print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                 max=len(val_loader),
                                                                                 loss=val_loss))
-                        self.visualize_output(val_output, tag="val", step=epoch*iter_per_epoch + i)
+                        self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
                 mean_val_loss = np.mean(val_losses)
                 mean_val_acc = np.mean(val_accs)
@@ -373,7 +373,7 @@ class NVS_Solver(object):
                                                                                        max=num_epochs,
                                                                                        acc=mean_val_acc,
                                                                                        loss=mean_val_loss))
-                    self.visualize_output(val_output, tag="val", step=epoch*iter_per_epoch + i)
+                    self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1],
