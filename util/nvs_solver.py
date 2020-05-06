@@ -338,7 +338,7 @@ class NVS_Solver(object):
                 val_losses = []
                 val_accs = []
 
-                val_minibatches = train_loader
+                val_minibatches = val_loader
                 if tqdm_mode == 'epoch':
                     val_minibatches = tqdm(val_minibatches)
                 for i, sample in enumerate(val_minibatches):
