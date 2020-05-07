@@ -25,9 +25,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Convert .depth text files float files to binary numpy .npy files')
-    parser.add_argument('--input', metavar='pathToFile', required=True,
+    parser.add_argument('--input', metavar='path', required=True,
                         help='path/to/input/directory')
-    parser.add_argument('--output', metavar='pathToDirectory', required=False, default=None,
+    parser.add_argument('--output', metavar='path', required=False, default=None,
                         help='path/to/output/directory. Optional, default: input directory')
     parser.add_argument('--width', metavar='N', type=int, required=False, default=640,
                         help='image width')
