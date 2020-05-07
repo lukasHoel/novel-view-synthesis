@@ -19,7 +19,7 @@ def to_cuda(data_tuple):
     out = ()
     if torch.cuda.is_available():
         for data in data_tuple:
-            out += (data.cuda(),)
+            out += (data.to("cuda:0"),)
     return out
 
 def default_batch_loader(batch):
@@ -134,11 +134,10 @@ class NVS_Solver(object):
         acc_dir = None
         if self.acc_func is not None:
             acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
-            # TODO test it
 
         return loss_dir, output, acc_dir
 
-    def log_loss_and_acc(self, loss_dir, acc_dir, prefix, idx): # acc_dir argument needed
+    def log_iteration_loss_and_acc(self, loss_dir, acc_dir, prefix, idx): # acc_dir argument needed
         # WRITE LOSSES
         for loss in loss_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Loss/' + loss,
@@ -151,7 +150,31 @@ class NVS_Solver(object):
             self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
                                    acc_dir[acc].data.cpu().numpy(),
                                    idx)
-        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["psnr"].data.cpu().numpy() # could also use acc_dir["ssim"]
+        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["ssim"].data.cpu().numpy() # could also use acc_dir["psnr"]
+
+    def log_epoch_loss_and_acc(self, train_loss, val_loss, train_acc, val_acc, idx):
+        self.train_loss_history.append(train_loss)
+        self.train_acc_history.append(train_acc)
+        self.writer.add_scalar('Epoch/Loss/Train', train_loss, idx)
+        self.writer.add_scalar('Epoch/Accuracy/Train', train_acc, idx)
+
+        if val_loss is not None:
+            self.val_loss_history.append(val_loss)
+            self.writer.add_scalar('Epoch/Loss/Val', val_loss, idx)
+            self.writer.add_scalars('Epoch/Loss',
+                                    {'train': train_loss,
+                                     'val': val_loss},
+                                    idx)
+
+        if val_acc is not None:
+            self.val_acc_history.append(val_acc)
+            self.writer.add_scalar('Epoch/Accuracy/Val', val_acc, idx)
+            self.writer.add_scalars('Epoch/Accuracy',
+                                    {'train': train_acc,
+                                     'val': val_acc},
+                                    idx)
+
+        self.writer.flush()
 
     def visualize_output(self, output, take_slice=None, tag="image", step=0):
         """
@@ -220,10 +243,10 @@ class NVS_Solver(object):
             test_accs = []
             for i, sample in enumerate(tqdm(test_loader)):
                 loss_dir, output, test_acc_dir = self.forward_pass(model, sample)
-                loss, test_acc = self.log_loss_and_acc(loss_dir,
-                                                       test_acc_dir,
-                                                       test_name,
-                                                       i)
+                loss, test_acc = self.log_iteration_loss_and_acc(loss_dir,
+                                                                 test_acc_dir,
+                                                                 test_name,
+                                                                 i)
                 test_losses.append(loss)
                 test_accs.append(test_acc)
 
@@ -293,7 +316,7 @@ class NVS_Solver(object):
                 train_minibatches = tqdm(train_minibatches)
             for i, sample in enumerate(train_minibatches):  # for every minibatch in training set
                 # FORWARD PASS --> Loss + acc calculation
-                #print("Time until next forward pass (loading from dataloader + backward pass) took: {}".format(time() - start))
+                #print("Dataloading took: {}".format(time() - start))
                 train_loss_dir, train_output, train_acc_dir = self.forward_pass(model, sample)
                 #start = time()
 
@@ -301,10 +324,10 @@ class NVS_Solver(object):
                 self.backward_pass(train_loss_dir, optim)
 
                 # LOGGING of loss and accuracy
-                train_loss, train_acc = self.log_loss_and_acc(train_loss_dir,
-                                                              train_acc_dir,
+                train_loss, train_acc = self.log_iteration_loss_and_acc(train_loss_dir,
+                                                                        train_acc_dir,
                                                               'Train/',
-                                                              epoch*iter_per_epoch + i)
+                                                                        epoch * iter_per_epoch + i)
                 train_losses.append(train_loss)
                 train_accs.append(train_acc)
 
@@ -315,15 +338,12 @@ class NVS_Solver(object):
                                                                               loss=train_loss))
                     self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
+                #print("Forward/Backward Pass took: {}".format(time()-start))
+                #start = time()
+
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
             mean_train_acc = np.mean(train_accs)
-
-            self.train_loss_history.append(mean_train_loss)
-            self.train_acc_history.append(mean_train_acc)
-
-            self.writer.add_scalar('Epoch/Loss/Train', mean_train_loss, epoch)
-            self.writer.add_scalar('Epoch/Accuracy/Train', mean_train_acc, epoch)
 
             if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
                 print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
@@ -333,6 +353,8 @@ class NVS_Solver(object):
                 self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
+            mean_val_loss = None
+            mean_val_acc = None
             if len(val_loader) > 0:
                 model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
                 with torch.no_grad():
@@ -345,10 +367,10 @@ class NVS_Solver(object):
                     for i, sample in enumerate(val_minibatches):
                         # FORWARD PASS --> Loss + acc calculation
                         val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
-                        val_loss, val_acc = self.log_loss_and_acc(val_loss_dir,
-                                                                  val_acc_dir,
+                        val_loss, val_acc = self.log_iteration_loss_and_acc(val_loss_dir,
+                                                                            val_acc_dir,
                                                                   'Val/',
-                                                                  epoch*len(val_minibatches) + i)
+                                                                            epoch * len(val_minibatches) + i)
                         val_losses.append(val_loss)
                         val_accs.append(val_acc)
 
@@ -362,19 +384,15 @@ class NVS_Solver(object):
                     mean_val_loss = np.mean(val_losses)
                     mean_val_acc = np.mean(val_accs)
 
-                    self.val_loss_history.append(mean_val_loss)
-                    self.val_acc_history.append(mean_val_acc)
-
-                    self.writer.add_scalar('Epoch/Loss/Val', mean_val_loss, epoch)
-                    self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
-                    self.writer.flush()
-
                     if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
                         print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
                                                                                            max=num_epochs,
                                                                                            acc=mean_val_acc,
                                                                                            loss=mean_val_loss))
                         self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
+
+            # LOG EPOCH LOSS / ACC FOR TRAIN AND VAL IN TENSORBOARD
+            self.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,
