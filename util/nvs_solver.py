@@ -267,9 +267,12 @@ class NVS_Solver(object):
             print("[TEST] mean acc/loss: {acc}/{loss}".format(acc=mean_acc, loss=mean_loss))
 
     def backward_pass(self, loss_dir, optim):
+        #with torch.autograd.profiler.profile(use_cuda=True) as prof:
         loss_dir['Total Loss'].backward()
         optim.step()
         optim.zero_grad()
+
+        #print(prof)
 
     def train(self,
               model,
@@ -278,7 +281,8 @@ class NVS_Solver(object):
               num_epochs=10,
               log_nth_iter=1,
               log_nth_epoch=1,
-              tqdm_mode='total'):
+              tqdm_mode='total',
+              verbose=False):
         """
         Train a given model with the provided data.
 
@@ -302,7 +306,6 @@ class NVS_Solver(object):
 
         print('START TRAIN on device: {}'.format(device))
 
-        #start = time()
         epochs = range(num_epochs)
         if tqdm_mode == 'total':
             epochs = tqdm(range(num_epochs))
@@ -314,11 +317,30 @@ class NVS_Solver(object):
             train_minibatches = train_loader
             if tqdm_mode == 'epoch':
                 train_minibatches = tqdm(train_minibatches)
+
+            # MEASURE ELAPSED TIME
+            if verbose:
+                # start first dataloading record
+                start = torch.cuda.Event(enable_timing=True)
+                end = torch.cuda.Event(enable_timing=True)
+                start.record()
             for i, sample in enumerate(train_minibatches):  # for every minibatch in training set
                 # FORWARD PASS --> Loss + acc calculation
-                #print("Dataloading took: {}".format(time() - start))
+
+                # MEASURE ELAPSED TIME
+                if verbose:
+                    # end dataloading pass record
+                    end.record()
+                    torch.cuda.synchronize()
+                    print("Dataloading took: {}".format(start.elapsed_time(end)))
+
+                    # start forward/backward record
+                    start = torch.cuda.Event(enable_timing=True)
+                    end = torch.cuda.Event(enable_timing=True)
+                    start.record()
+
+                # FORWARD PASS
                 train_loss_dir, train_output, train_acc_dir = self.forward_pass(model, sample)
-                #start = time()
 
                 # BACKWARD PASS --> Gradient-Descent update
                 self.backward_pass(train_loss_dir, optim)
@@ -326,7 +348,7 @@ class NVS_Solver(object):
                 # LOGGING of loss and accuracy
                 train_loss, train_acc = self.log_iteration_loss_and_acc(train_loss_dir,
                                                                         train_acc_dir,
-                                                              'Train/',
+                                                                        'Train/',
                                                                         epoch * iter_per_epoch + i)
                 train_losses.append(train_loss)
                 train_accs.append(train_acc)
@@ -338,8 +360,17 @@ class NVS_Solver(object):
                                                                               loss=train_loss))
                     self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
-                #print("Forward/Backward Pass took: {}".format(time()-start))
-                #start = time()
+                # MEASURE ELAPSED TIME
+                if verbose:
+                    # end forward/backward pass record
+                    end.record()
+                    torch.cuda.synchronize()
+                    print("Forward/Backward Pass took: {}".format(start.elapsed_time(end)))
+
+                    # start dataloading record
+                    start = torch.cuda.Event(enable_timing=True)
+                    end = torch.cuda.Event(enable_timing=True)
+                    start.record()
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)

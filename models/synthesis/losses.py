@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import vgg19
@@ -63,7 +64,10 @@ class PerceptualLoss(nn.Module):
         super().__init__()
         self.model = VGG19(requires_grad=False) # Freeze the network
         self.criterion = nn.L1Loss()
-        self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0] # Weights used for the contribution of the output of each slice to the total loss 
+        self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0] # Weights used for the contribution of the output of each slice to the total loss
+
+        if torch.cuda.is_available():
+            self.model.to("cuda:0") # TODO bad if using multiple GPUs via nn.Parallel?
 
     def forward(self, pred_img, gt_img):
         """
