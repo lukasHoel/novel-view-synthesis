@@ -262,17 +262,17 @@ class ICLNUIMDataset(Dataset):
 
             if self.RTrelativeToOutput:
                 #calculate relative RT matrix
-                R1 = RT1[:, :3]
+                R1 = RT1[:3, :3]
                 T1 = RT1[:3, 3]
-                R2 = RT2[:, :3]
+                R2 = RT2[:3, :3]
                 T2 = RT2[:3, 3]
 
                 # RT
-                print(T1.shape)
-                print((T1-T2).shape)
-                T = (R2.T@R1).dot(T1 - T2)/50. # /50 proved to work for the ICL dataset... do not know why, but it works!
+                #print(T1.shape)
+                #print((T1-T2).shape)
+                T = (R1.T@R2).dot(T2 - T1)
                 RT = np.eye(4)
-                RT[0:3, 0:3] = R2.T @ R1
+                RT[0:3, 0:3] = R1.T @ R2
                 RT[:3, 3] = T
                 RT = RT.astype(np.float32)
                 RT = torch.from_numpy(RT)
