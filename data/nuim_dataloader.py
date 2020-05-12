@@ -210,6 +210,7 @@ class ICLNUIMDataset(Dataset):
 
             # load image of new index
             output_image = self.load_image(output_idx)
+            output_depth = self.load_depth(output_idx)
 
             # load cam of new index
             RT2, RT2inv = self.load_cam(output_idx)
@@ -249,6 +250,7 @@ class ICLNUIMDataset(Dataset):
 
             output = {
                 'image': output_image,
+                'depth': output_depth,
                 'idx': output_idx
             }
 
@@ -265,6 +267,7 @@ class ICLNUIMDataset(Dataset):
             sample['depth'] = self.transform(sample['depth'])
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
+                sample['output']['depth'] = self.transform(sample['output']['depth'])
 
         return sample
 
