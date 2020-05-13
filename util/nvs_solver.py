@@ -19,7 +19,7 @@ def to_cuda(data_tuple):
     out = ()
     if torch.cuda.is_available():
         for data in data_tuple:
-            out += (data.cuda(),)
+            out += (data.to("cuda:0"),)
     return out
 
 def default_batch_loader(batch):
@@ -134,24 +134,47 @@ class NVS_Solver(object):
         acc_dir = None
         if self.acc_func is not None:
             acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
-            # TODO test it
 
         return loss_dir, output, acc_dir
 
-    def log_loss_and_acc(self, loss_dir, acc_dir, prefix, idx): # acc_dir argument needed
+    def log_iteration_loss_and_acc(self, loss_dir, acc_dir, prefix, idx): # acc_dir argument needed
         # WRITE LOSSES
         for loss in loss_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Loss/' + loss,
-                                   loss_dir[loss].data.cpu().numpy(),
+                                   loss_dir[loss].detach().cpu().numpy(),
                                    idx)
         self.writer.flush()
 
         # WRITE ACCS
         for acc in acc_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
-                                   acc_dir[acc].data.cpu().numpy(),
+                                   acc_dir[acc].detach().data.cpu().numpy(),
                                    idx)
-        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["psnr"].data.cpu().numpy() # could also use acc_dir["ssim"]
+        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["ssim"].detach().cpu().numpy() # could also use acc_dir["psnr"]
+
+    def log_epoch_loss_and_acc(self, train_loss, val_loss, train_acc, val_acc, idx):
+        self.train_loss_history.append(train_loss)
+        self.train_acc_history.append(train_acc)
+        self.writer.add_scalar('Epoch/Loss/Train', train_loss, idx)
+        self.writer.add_scalar('Epoch/Accuracy/Train', train_acc, idx)
+
+        if val_loss is not None:
+            self.val_loss_history.append(val_loss)
+            self.writer.add_scalar('Epoch/Loss/Val', val_loss, idx)
+            self.writer.add_scalars('Epoch/Loss',
+                                    {'train': train_loss,
+                                     'val': val_loss},
+                                    idx)
+
+        if val_acc is not None:
+            self.val_acc_history.append(val_acc)
+            self.writer.add_scalar('Epoch/Accuracy/Val', val_acc, idx)
+            self.writer.add_scalars('Epoch/Accuracy',
+                                    {'train': train_acc,
+                                     'val': val_acc},
+                                    idx)
+
+        self.writer.flush()
 
     def visualize_output(self, output, take_slice=None, tag="image", step=0):
         """
@@ -161,8 +184,10 @@ class NVS_Solver(object):
         ----------
         output: batch of data, containing input, target, prediction and depth image
         take_slice: two element tuple or list can be specified to take a slice of the batch (default: take whole batch)
+        tag: used for grouping images on tensorboard. e.g. "train", "val", "test" etc.
+        step: used for stamping epoch or iteration
         """
-        # TODO: input_batch and depth_batch are ignored for the moment, however, they can also be integrated later on
+        # TODO: depth_batch is ignored for the moment, however, if needed, it can also be integrated later on
         input_batch, target_batch, pred_batch, depth_batch = output["InputImg"].cpu(),\
                                                              output["OutputImg"].cpu(),\
                                                              output["PredImg"].cpu(),\
@@ -170,8 +195,9 @@ class NVS_Solver(object):
         with torch.no_grad():
             # In case of a single image add one dimension to the beginning to create single image batch
             if len(pred_batch.shape) == 3:
-                pred_batch = pred_batch.unsqueeze(0)
+                input_batch = input_batch.unsqueeze(0)
                 target_batch = target_batch.unsqueeze(0)
+                pred_batch = pred_batch.unsqueeze(0)
             
             if len(pred_batch.shape) != 4:
                 print("Only 3D or 4D tensors can be visualized")
@@ -179,19 +205,23 @@ class NVS_Solver(object):
 
             # If slice specified, take a portion of the batch
             if take_slice and (type(take_slice) in (list, tuple)) and (len(take_slice) == 2):
-                pred_batch = pred_batch[take_slice[0], take_slice[1]]
+                input_batch = input_batch[take_slice[0], take_slice[1]]
                 target_batch = target_batch[take_slice[0], take_slice[1]]
+                pred_batch = pred_batch[take_slice[0], take_slice[1]]
                 
-            # Store vstack of images: [pred_batch0, target_batch0, ...].T on img_lst
+            # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
             img_lst = torch.Tensor()
 
-            # Run a loop to interleave images in pred_batch and target_batch batches
+            # Run a loop to interleave images in input_batch, target_batch, pred_batch batches
             for i in range(pred_batch.shape[0]):
-                # Each iteration: Pick pred_batch and its target_batch 
-                # (we need to extend the dimension of pred_batch and target_batch images with .unsqueeze(0))
-                img_lst = torch.cat((img_lst, pred_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0)), dim=0)
+                # Each iteration pick input image and corresponding target & pred images
+                # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
+                # Order in img_list defines the layout. 
+                # Current layout: input - target - pred at each row
+                img_lst = torch.cat((img_lst, input_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0), pred_batch[i].unsqueeze(0)), dim=0)
             
-            img_grid = make_grid(img_lst, nrow=2) # Per row, pick two images from the stack # TODO: this idea can be extended, we can even parametrize this
+            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack 
+            # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
             self.writer.add_image(tag, img_grid, global_step=step) # NOTE: add_image method expects image values in range [0,1]
@@ -213,12 +243,15 @@ class NVS_Solver(object):
             test_accs = []
             for i, sample in enumerate(tqdm(test_loader)):
                 loss_dir, output, test_acc_dir = self.forward_pass(model, sample)
-                loss, test_acc = self.log_loss_and_acc(loss_dir, test_acc_dir, test_name, i)
+                loss, test_acc = self.log_iteration_loss_and_acc(loss_dir,
+                                                                 test_acc_dir,
+                                                                 test_name,
+                                                                 i)
                 test_losses.append(loss)
                 test_accs.append(test_acc)
 
                 # Print loss every log_nth iteration
-                if (i % log_nth == 0):
+                if log_nth != 0 and i % log_nth == 0:
                     print("[Iteration {cur}/{max}] TEST loss: {loss}".format(cur=i + 1,
                                                                               max=len(test_loader),
                                                                               loss=loss))
@@ -234,20 +267,36 @@ class NVS_Solver(object):
             print("[TEST] mean acc/loss: {acc}/{loss}".format(acc=mean_acc, loss=mean_loss))
 
     def backward_pass(self, loss_dir, optim):
+        #with torch.autograd.profiler.profile(use_cuda=True) as prof:
         loss_dir['Total Loss'].backward()
         optim.step()
         optim.zero_grad()
 
-    def train(self, model, train_loader, val_loader, num_epochs=10, log_nth=0):
+        #print(prof)
+
+    def train(self,
+              model,
+              train_loader,
+              val_loader,
+              num_epochs=10,
+              log_nth_iter=1,
+              log_nth_epoch=1,
+              tqdm_mode='total',
+              verbose=False):
         """
         Train a given model with the provided data.
 
         Inputs:
-        - model: model object initialized from a torch.nn.Module
-        - train_loader: train data in torch.utils.data.DataLoader
-        - val_loader: val data in torch.utils.data.DataLoader
-        - num_epochs: total number of training epochs
-        - log_nth: log training accuracy and loss every nth iteration
+        :param model: nvs_model object initialized from nvs_model.py
+        :param train_loader: train data in torch.utils.data.DataLoader
+        :param val_loader: val data in torch.utils.data.DataLoader
+        :param num_epochs: total number of training epochs
+        :param log_nth_iter: log training accuracy and loss every nth iteration. Default 1: meaning "Log everytime", 0 means "never log"
+        :param log_nth_epoch: log training accuracy and loss every nth epoch. Default 1: meaning "Log everytime", 0 means "never log"
+        :param tqdm_mode:
+                'total': tqdm log how long all epochs will take,
+                'epoch': tqdm for each epoch how long it will take,
+                anything else, e.g. None: do not use tqdm
         """
         optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()), **self.optim_args)
         self._reset_histories()
@@ -257,85 +306,129 @@ class NVS_Solver(object):
 
         print('START TRAIN on device: {}'.format(device))
 
-        #start = time()
-        for epoch in range(num_epochs):  # for every epoch...
+        epochs = range(num_epochs)
+        if tqdm_mode == 'total':
+            epochs = tqdm(range(num_epochs))
+        for epoch in epochs:  # for every epoch...
             model.train()  # TRAINING mode (for dropout, batchnorm, etc.)
             train_losses = []
             train_accs = []
-            for i, sample in enumerate(tqdm(train_loader)):  # for every minibatch in training set
+
+            train_minibatches = train_loader
+            if tqdm_mode == 'epoch':
+                train_minibatches = tqdm(train_minibatches)
+
+            # MEASURE ELAPSED TIME
+            if verbose:
+                # start first dataloading record
+                start = torch.cuda.Event(enable_timing=True)
+                end = torch.cuda.Event(enable_timing=True)
+                start.record()
+            for i, sample in enumerate(train_minibatches):  # for every minibatch in training set
                 # FORWARD PASS --> Loss + acc calculation
-                #print("Time until next forward pass (loading from dataloader + backward pass) took: {}".format(time() - start))
+
+                # MEASURE ELAPSED TIME
+                if verbose:
+                    # end dataloading pass record
+                    end.record()
+                    torch.cuda.synchronize()
+                    print("Dataloading took: {}".format(start.elapsed_time(end)))
+
+                    # start forward/backward record
+                    start = torch.cuda.Event(enable_timing=True)
+                    end = torch.cuda.Event(enable_timing=True)
+                    start.record()
+
+                # FORWARD PASS
                 train_loss_dir, train_output, train_acc_dir = self.forward_pass(model, sample)
-                #start = time()
 
                 # BACKWARD PASS --> Gradient-Descent update
                 self.backward_pass(train_loss_dir, optim)
 
                 # LOGGING of loss and accuracy
-                train_loss, train_acc = self.log_loss_and_acc(train_loss_dir, train_acc_dir, 'Train/', i)
+                train_loss, train_acc = self.log_iteration_loss_and_acc(train_loss_dir,
+                                                                        train_acc_dir,
+                                                                        'Train/',
+                                                                        epoch * iter_per_epoch + i)
                 train_losses.append(train_loss)
                 train_accs.append(train_acc)
 
                 # Print loss every log_nth iteration
-                if (i % log_nth == 0):
+                if log_nth_iter != 0 and i % log_nth_iter == 0:
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
-                    self.visualize_output(train_output, tag="train", step=i)
+                    self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
+
+                # MEASURE ELAPSED TIME
+                if verbose:
+                    # end forward/backward pass record
+                    end.record()
+                    torch.cuda.synchronize()
+                    print("Forward/Backward Pass took: {}".format(start.elapsed_time(end)))
+
+                    # start dataloading record
+                    start = torch.cuda.Event(enable_timing=True)
+                    end = torch.cuda.Event(enable_timing=True)
+                    start.record()
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
             mean_train_acc = np.mean(train_accs)
 
-            self.train_loss_history.append(mean_train_loss)
-            self.train_acc_history.append(mean_train_acc)
-
-            self.writer.add_scalar('Epoch/Loss/Train', mean_train_loss, epoch)
-            self.writer.add_scalar('Epoch/Accuracy/Train', mean_train_acc, epoch)
-
-            print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                 max=num_epochs,
-                                                                                 acc=mean_train_acc,
-                                                                                 loss=mean_train_loss))
+            if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                     max=num_epochs,
+                                                                                     acc=mean_train_acc,
+                                                                                     loss=mean_train_loss))
+                self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
-            model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
-            with torch.no_grad():
-                val_losses = []
-                val_accs = []
-                for i, sample in enumerate(tqdm(val_loader)):
-                    # FORWARD PASS --> Loss + acc calculation
-                    val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
-                    val_loss, val_acc = self.log_loss_and_acc(val_loss_dir, val_acc_dir, 'Val/', i)
-                    val_losses.append(val_loss)
-                    val_accs.append(val_acc)
+            mean_val_loss = None
+            mean_val_acc = None
+            if len(val_loader) > 0:
+                model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
+                with torch.no_grad():
+                    val_losses = []
+                    val_accs = []
 
-                    # Print loss every log_nth iteration
-                    if (i % log_nth == 0):
-                        print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
-                                                                                max=len(val_loader),
-                                                                                loss=val_loss))
-                        self.visualize_output(val_output, tag="val", step=i)
+                    val_minibatches = val_loader
+                    if tqdm_mode == 'epoch':
+                        val_minibatches = tqdm(val_minibatches)
+                    for i, sample in enumerate(val_minibatches):
+                        # FORWARD PASS --> Loss + acc calculation
+                        val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
+                        val_loss, val_acc = self.log_iteration_loss_and_acc(val_loss_dir,
+                                                                            val_acc_dir,
+                                                                  'Val/',
+                                                                            epoch * len(val_minibatches) + i)
+                        val_losses.append(val_loss)
+                        val_accs.append(val_acc)
 
-                mean_val_loss = np.mean(val_losses)
-                mean_val_acc = np.mean(val_accs)
+                        # Print loss every log_nth iteration
+                        if log_nth_iter != 0 and i % log_nth_iter == 0:
+                            print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
+                                                                                    max=len(val_loader),
+                                                                                    loss=val_loss))
+                            self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
-                self.val_loss_history.append(mean_val_loss)
-                self.val_acc_history.append(mean_val_acc)
+                    mean_val_loss = np.mean(val_losses)
+                    mean_val_acc = np.mean(val_accs)
 
-                self.writer.add_scalar('Epoch/Loss/Val', mean_val_loss, epoch)
-                self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
-                self.writer.flush()
+                    if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                        print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                           max=num_epochs,
+                                                                                           acc=mean_val_acc,
+                                                                                           loss=mean_val_loss))
+                        self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
-                print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                   max=num_epochs,
-                                                                                   acc=mean_val_acc,
-                                                                                   loss=mean_val_loss))
+            # LOG EPOCH LOSS / ACC FOR TRAIN AND VAL IN TENSORBOARD
+            self.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
 
         self.writer.add_hparams(self.hparam_dict, {
-            'HParam/Accuracy/Val': self.val_acc_history[-1],
+            'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,
             'HParam/Accuracy/Train': self.train_acc_history[-1],
-            'HParam/Loss/Val': self.val_loss_history[-1],
+            'HParam/Loss/Val': self.val_loss_history[-1] if len(val_loader) > 0 else 0,
             'HParam/Loss/Train': self.train_loss_history[-1]
         })
         self.writer.flush()

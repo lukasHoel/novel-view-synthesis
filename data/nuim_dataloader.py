@@ -3,9 +3,16 @@ import os
 import torch
 from torch.utils.data import Dataset
 from skimage import io
+from PIL import Image
 from util.camera_transformations import *
 import re
+import torchvision
 
+from time import time
+
+class ToNumpy(object):
+    def __call__(self, sample):
+        return np.array(sample)
 
 class ICLNUIMDataset(Dataset):
     '''
@@ -45,6 +52,7 @@ class ICLNUIMDataset(Dataset):
                  sampleOutput=True,
                  RTrelativeToOutput=False,
                  inverse_depth=False,
+                 cacheItems=False,
                  transform=None):
         '''
 
@@ -59,6 +67,17 @@ class ICLNUIMDataset(Dataset):
         :param use_real_intrinsics: If true, return the K and Kinv matrix from ICL dataset. If false return identity matrix.
         '''
         self.transform = transform
+
+        # Fix for this issue: https://github.com/pytorch/vision/issues/2194
+        if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
+            self.transform_depth = torchvision.transforms.Compose([
+                *self.transform.transforms[:-1],
+                ToNumpy(),
+                torchvision.transforms.ToTensor()
+            ])
+        else:
+            self.transform_depth = self.transform
+
         self.depth_to_image_plane = depth_to_image_plane
         self.use_real_intrinsics = use_real_intrinsics
         self.inverse_depth = inverse_depth
@@ -66,28 +85,54 @@ class ICLNUIMDataset(Dataset):
 
         self.img = sorted([f for f in os.listdir(path) if f.endswith('.png')])
         self.depth = sorted([f for f in os.listdir(path) if f.endswith('.depth')])
+        self.depth_binary = sorted([f for f in os.listdir(path) if f.endswith('.depth.npy')])
+        self.has_binary_depth = len(self.depth_binary) > 0
         self.cam = sorted([f for f in os.listdir(path) if f.endswith('.txt')])
 
         self.size = len(self.img)
 
         self.sampleOutput = sampleOutput
+        if self.sampleOutput:
+            self.inputToOutputIndex = []
+            for idx in range(self.size):
+                # sample second idx in [idx-30, idx+30) interval
+                low = idx - 30 if idx >= 30 else 0
+                high = idx + 30 if idx <= self.size - 30 else self.size
+                output_idx = np.random.randint(low, high, 1)[0] # high is exclusive
+
+                # never return the same idx, default handling: just use +1 or -1 idx
+                if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
+                    output_idx = idx+1 if idx < self.size-1 else idx-1
+
+                self.inputToOutputIndex.append(output_idx)
+
         self.RTrelativeToOutput = RTrelativeToOutput
 
+        self.cacheItems = cacheItems
+        self.itemCache = [None for i in range(self.size)]
+
     def load_image(self, idx):
-        return io.imread(os.path.join(self.path, self.img[idx]))
+        return Image.open(os.path.join(self.path, self.img[idx]))
+        #return io.imread(os.path.join(self.path, self.img[idx]))
 
     def load_depth(self, idx, img_shape=(480, 640)):
-        with open(os.path.join(self.path, self.depth[idx])) as f:
-            depth = [float(i) for i in f.read().split(' ') if i.strip()]  # read .depth file
-            depth = np.asarray(depth, dtype=np.float32).reshape(img_shape)  # convert to same format as image WxH
+        if self.has_binary_depth:
+            # read faster from .depth.npy file - this is much faster than parsing the char-based .depth file from ICL directly.
+            depth = np.load(os.path.join(self.path, self.depth_binary[idx]))
+        else:
+            with open(os.path.join(self.path, self.depth[idx])) as f:
+                depth = [float(i) for i in f.read().split(' ') if i.strip()]  # read .depth file
+                depth = np.asarray(depth, dtype=np.float32).reshape(img_shape)  # convert to same format as image WxH
 
-            # convert to image plane depth by taking into account the position in the WxH array as (x, y)
-            if self.depth_to_image_plane:
-                depth = np.fromfunction(lambda x, y: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
+        # convert to image plane depth by taking into account the position in the WxH array as (x, y)
+        if self.depth_to_image_plane:
+            depth = np.fromfunction(lambda x, y: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
-            if self.inverse_depth:
-                depth = np.power(depth, -1)
-        return depth
+        # invert depth
+        if self.inverse_depth:
+            depth = np.power(depth, -1)
+
+        return Image.fromarray(depth, mode='F') # return as float PIL Image
 
     def load_cam(self, idx):
         cam = {} # load the .txt file in this dict
@@ -185,8 +230,15 @@ class ICLNUIMDataset(Dataset):
 
 
         """
+
+        if self.itemCache[idx] is not None:
+            return self.itemCache[idx]
+
         image = self.load_image(idx)
+        #start = time()
         depth = self.load_depth(idx)
+        #print("Depth loading took {}".format(time() - start))
+
 
         RT1, RT1inv = self.load_cam(idx)
 
@@ -199,14 +251,8 @@ class ICLNUIMDataset(Dataset):
 
         output = None
         if self.sampleOutput:
-            # sample second idx in [idx-30, idx+30) interval
-            low = idx - 30 if idx >= 30 else 0
-            high = idx + 30 if idx <= self.size - 30 else self.size
-            output_idx = np.random.randint(low, high, 1)[0] # high is exclusive
-
-            # never return the same idx, default handling: just use +1 or -1 idx
-            if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
-                output_idx = idx+1 if idx < self.size-1 else idx-1
+            # lookup output for this sample
+            output_idx = self.inputToOutputIndex[idx]
 
             # load image of new index
             output_image = self.load_image(output_idx)
@@ -217,17 +263,17 @@ class ICLNUIMDataset(Dataset):
 
             if self.RTrelativeToOutput:
                 #calculate relative RT matrix
-                R1 = RT1[:, :3]
+                R1 = RT1[:3, :3]
                 T1 = RT1[:3, 3]
-                R2 = RT2[:, :3]
+                R2 = RT2[:3, :3]
                 T2 = RT2[:3, 3]
 
                 # RT
-                print(T1.shape)
-                print((T1-T2).shape)
-                T = (R2.T@R1).dot(T1 - T2)/50. # /50 proved to work for the ICL dataset... do not know why, but it works!
+                #print(T1.shape)
+                #print((T1-T2).shape)
+                T = (R1.T@R2).dot(T2 - T1)
                 RT = np.eye(4)
-                RT[0:3, 0:3] = R2.T @ R1
+                RT[0:3, 0:3] = R1.T @ R2
                 RT[:3, 3] = T
                 RT = RT.astype(np.float32)
                 RT = torch.from_numpy(RT)
@@ -264,10 +310,13 @@ class ICLNUIMDataset(Dataset):
 
         if self.transform:
             sample['image'] = self.transform(sample['image'])
-            sample['depth'] = self.transform(sample['depth'])
+            sample['depth'] = self.transform_depth(sample['depth'])
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
-                sample['output']['depth'] = self.transform(sample['output']['depth'])
+                sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
+
+        if self.cacheItems:
+            self.itemCache[idx] = sample
 
         return sample
 
@@ -295,18 +344,29 @@ def getEulerAngles(R):
     return rx, ry, rz
 
 def test():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.Resize((256, 256)),
+        torchvision.transforms.ToTensor(),
+    ])
+
     dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop",
                              depth_to_image_plane=True,
+                             use_real_intrinsics=False,
                              sampleOutput=True,
                              RTrelativeToOutput=False,
-                             inverse_depth=False)
-    #dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleOutput=True);
+                             inverse_depth=False,
+                             cacheItems=True,
+                             transform=transform)
+    #dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleOutput=True, transform=transform);
 
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
     i = 400
     item = dataset.__getitem__(i)
+
+    #print(item["depth"].numpy().flags)
+
 
     print(item["image"].shape)
     print(item["depth"].shape)
@@ -326,11 +386,11 @@ def test():
     print("RT2*RT2inv:\n{}".format(item['cam']['RT2'].matmul(item['cam']['RT2inv'])))
 
     import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=item['depth'].shape)
+    fig = plt.figure(figsize=item['image'].shape[1:])
     fig.suptitle("Sample " + str(i), fontsize=16)
-    img = item['image']
-    depth = item['depth']
-    out_img = item['output']['image']
+    img = np.moveaxis(item['image'].numpy(), 0, -1)
+    depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
+    out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
     out_idx = item['output']['idx']
     fig.add_subplot(1, 3, 1)
     plt.title("Image")
@@ -343,6 +403,7 @@ def test():
     plt.imshow(out_img)
 
     plt.show()
+
 
 
 if __name__ == "__main__":

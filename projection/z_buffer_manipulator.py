@@ -64,7 +64,7 @@ class PtsManipulator(nn.Module):
         self.register_buffer("xyzs", xyzs)
 
     def project_pts(
-            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, colors=None
+            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
     ):
         # add Zs to the coordinate system        
         # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image (should be inverted?)
@@ -146,8 +146,7 @@ class PtsManipulator(nn.Module):
             src = src.view(bs, c, -1)
 
         pts3D = self.project_pts(
-            pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2,
-            src.squeeze().permute((1, 0)).cpu().detach().numpy()
+            pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
         )
         pointcloud = pts3D.permute(0, 2, 1).contiguous()
         result = self.splatter(pointcloud, src)

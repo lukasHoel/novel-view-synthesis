@@ -83,17 +83,30 @@ class GAN_Wrapper_Solver(object):
         self.val_acc_history = []
         self.val_loss_history = []
 
-    def train(self, model, train_loader, val_loader, num_epochs=10, log_nth=0, steps=1):
+    def train(self,
+              model,
+              train_loader,
+              val_loader,
+              num_epochs=10,
+              log_nth_iter=1,
+              log_nth_epoch=1,
+              tqdm_mode='total',
+              steps=1):
         """
         Train a given nvs_model with the provided data.
 
         Inputs:
-        - model: nvs_model object initialized from nvs_model.py
-        - train_loader: train data in torch.utils.data.DataLoader
-        - val_loader: val data in torch.utils.data.DataLoader
-        - num_epochs: total number of training epochs
-        - log_nth: log training accuracy and loss every nth iteration
-        - steps: how many generator/discriminator steps to take before changing to discriminator/generator
+        :param model: nvs_model object initialized from nvs_model.py
+        :param train_loader: train data in torch.utils.data.DataLoader
+        :param val_loader: val data in torch.utils.data.DataLoader
+        :param num_epochs: total number of training epochs
+        :param log_nth_iter: log training accuracy and loss every nth iteration. Default 1: meaning "Log everytime", 0 means "never log"
+        :param log_nth_epoch: log training accuracy and loss every nth epoch. Default 1: meaning "Log everytime", 0 means "never log"
+        :param tqdm_mode:
+                'total': tqdm log how long all epochs will take,
+                'epoch': tqdm for each epoch how long it will take,
+                anything else, e.g. None: do not use tqdm
+        :param steps: how many generator/discriminator steps to take before changing to discriminator/generator
         """
 
         optimizer_G = self.nvs_solver.optim(
@@ -111,11 +124,19 @@ class GAN_Wrapper_Solver(object):
         print('START TRAIN on device: {}'.format(device))
 
         #start = time()
-        for epoch in range(num_epochs):  # for every epoch...
+        epochs = range(num_epochs)
+        if tqdm_mode == 'total':
+            epochs = tqdm(range(num_epochs))
+
+        for epoch in epochs:  # for every epoch...
             model.train()  # TRAINING mode (for dropout, batchnorm, etc.)
             train_losses = []
             train_accs = []
-            for i, sample in enumerate(tqdm(train_loader)):  # for every minibatch in training set
+
+            train_minibatches = train_loader
+            if tqdm_mode == 'epoch':
+                train_minibatches = tqdm(train_minibatches)
+            for i, sample in enumerate(train_minibatches):  # for every minibatch in training set
                 # RUN GENERATOR steps times
                 all_output_images = []
                 for j in range(0, steps):
@@ -147,70 +168,70 @@ class GAN_Wrapper_Solver(object):
                 nvs_losses.update(d_losses)
 
                 # LOGGING of loss
-                train_loss, train_acc = self.nvs_solver.log_loss_and_acc(nvs_losses, nvs_accs, 'Train/', i)
+                train_loss, train_acc = self.nvs_solver.log_iteration_loss_and_acc(nvs_losses, nvs_accs, 'Train/', epoch * iter_per_epoch + i)
                 train_losses.append(train_loss) # TODO is this correct? see above: why not combine everything into Total Loss?
                 train_accs.append(train_acc)
 
                 # Print loss every log_nth iteration
-                if (i % log_nth == 0):
+                if log_nth_iter != 0 and i % log_nth_iter == 0:
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
-                    self.nvs_solver.visualize_output(all_output_images[-1], tag="train")
+                    self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
             mean_train_acc = np.mean(train_accs)
 
-            self.train_loss_history.append(mean_train_loss)
-            self.train_acc_history.append(mean_train_acc)
-
-            self.writer.add_scalar('Epoch/Loss/Train', mean_train_loss, epoch)
-            self.writer.add_scalar('Epoch/Accuracy/Train', mean_train_acc, epoch)
-
-            print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                 max=num_epochs,
-                                                                                 acc=mean_train_acc,
-                                                                                 loss=mean_train_loss))
+            if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                     max=num_epochs,
+                                                                                     acc=mean_train_acc,
+                                                                                     loss=mean_train_loss))
+                self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
-            model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
-            with torch.no_grad():
-                val_losses = []
-                val_accs = []
-                for i, sample in enumerate(tqdm(val_loader)):
+            mean_val_loss = None
+            mean_val_acc = None
+            if len(val_loader) > 0:
+                model.eval()  # EVAL mode (for dropout, batchnorm, etc.)
+                with torch.no_grad():
+                    val_losses = []
+                    val_accs = []
+                    val_minibatches = val_loader
+                    if tqdm_mode == 'epoch':
+                        val_minibatches = tqdm(val_minibatches)
+                    for i, sample in enumerate(val_minibatches):
 
-                    nvs_losses, output, nvs_accs = self.nvs_solver.forward_pass(model, sample)
-                    val_loss, val_acc = self.nvs_solver.log_loss_and_acc(nvs_losses, nvs_accs, 'Val/', i)
-                    val_losses.append(val_loss)
-                    val_accs.append(val_acc)
+                        nvs_losses, output, nvs_accs = self.nvs_solver.forward_pass(model, sample)
+                        val_loss, val_acc = self.nvs_solver.log_iteration_loss_and_acc(nvs_losses, nvs_accs, 'Val/', epoch * len(val_minibatches) + i)
+                        val_losses.append(val_loss)
+                        val_accs.append(val_acc)
 
-                    # Print loss every log_nth iteration
-                    if (i % log_nth == 0):
-                        print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
-                                                                                max=len(val_loader),
-                                                                                loss=val_loss))
-                        self.nvs_solver.visualize_output(output, tag="val")
+                        # Print loss every log_nth iteration
+                        if log_nth_iter != 0 and i % log_nth_iter == 0:
+                            print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
+                                                                                    max=len(val_loader),
+                                                                                    loss=val_loss))
+                            self.nvs_solver.visualize_output(output, tag="val", step=epoch*len(val_minibatches) + i)
 
-                mean_val_loss = np.mean(val_losses)
-                mean_val_acc = np.mean(val_accs)
+                    mean_val_loss = np.mean(val_losses)
+                    mean_val_acc = np.mean(val_accs)
 
-                self.val_loss_history.append(mean_val_loss)
-                self.val_acc_history.append(mean_val_acc)
+                    if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                        print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
+                                                                                           max=num_epochs,
+                                                                                           acc=mean_val_acc,
+                                                                                           loss=mean_val_loss))
+                        self.nvs_solver.visualize_output(output, tag="val", step=epoch*len(val_minibatches) + i)
 
-                self.writer.add_scalar('Epoch/Loss/Val', mean_val_loss, epoch)
-                self.writer.add_scalar('Epoch/Accuracy/Val', mean_val_acc, epoch)
-                self.writer.flush()
-
-                print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                   max=num_epochs,
-                                                                                   acc=mean_val_acc,
-                                                                                   loss=mean_val_loss))
+            # LOG EPOCH LOSS / ACC FOR TRAIN AND VAL IN TENSORBOARD
+            self.nvs_solver.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
 
         self.writer.add_hparams(self.hparam_dict, {
-            'HParam/Accuracy/Val': self.val_acc_history[-1],
+            'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,
             'HParam/Accuracy/Train': self.train_acc_history[-1],
-            'HParam/Loss/Val': self.val_loss_history[-1],
+            'HParam/Loss/Val': self.val_loss_history[-1] if len(val_loader) > 0 else 0,
             'HParam/Loss/Train': self.train_loss_history[-1]
         })
         self.writer.flush()

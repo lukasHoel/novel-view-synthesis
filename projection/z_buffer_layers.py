@@ -85,7 +85,7 @@ class RasterizePointsXYsBlending(nn.Module):
         pts3D[:,:,0] = - pts3D[:,:,0]
 
         # Add on the default feature to the end of the src
-        # src = torch.cat((src, self.default_feature.repeat(bs, 1, 1)), 2)
+        #src = torch.cat((src, self.default_feature.repeat(bs, 1, 1)), 2)
 
         radius = float(self.radius) / float(image_size) * 2.0 # convert radius to fit the [-1,1] NDC ?? Or is this just arbitrary scaling s.t. radius as meaningful size?
         params = compositing.CompositeParams(radius=radius)

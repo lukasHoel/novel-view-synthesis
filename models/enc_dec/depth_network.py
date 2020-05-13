@@ -80,32 +80,25 @@ class Unet(nn.Module):
         # state size is (num_filters x 8) x 1 x 1
         d1_ = self.batch_norm8_4(self.dconv1(self.up(self.relu(e8))))
         # state size is (num_filters x 8) x 2 x 2
-        crop = self.center_crop(e7, d1_.shape[2:])
         d1 = torch.cat((d1_, e7), 1)
         d2_ = self.batch_norm8_5(self.dconv2(self.up(self.relu(d1))))
         # state size is (num_filters x 8) x 4 x 4
-        crop = self.center_crop(e6, d2_.shape[2:])
         d2 = torch.cat((d2_, e6), 1)
         d3_ = self.batch_norm8_6(self.dconv3(self.up(self.relu(d2))))
         # state size is (num_filters x 8) x 8 x 8
-        crop = self.center_crop(e5, d3_.shape[2:])
         d3 = torch.cat((d3_, e5), 1)
         d4_ = self.batch_norm8_7(self.dconv4(self.up(self.relu(d3))))
         # state size is (num_filters x 8) x 16 x 16
-        crop = self.center_crop(e4, d4_.shape[2:])
         d4 = torch.cat((d4_, e4), 1)
         d5_ = self.batch_norm4_1(self.dconv5(self.up(self.relu(d4))))
         # state size is (num_filters x 4) x 32 x 32
-        crop = self.center_crop(e3, d5_.shape[2:])
         d5 = torch.cat((d5_, e3), 1)
         d6_ = self.batch_norm2_1(self.dconv6(self.up(self.relu(d5))))
         # state size is (num_filters x 2) x 64 x 64
-        crop = self.center_crop(e2, d6_.shape[2:])
         d6 = torch.cat((d6_, e2), 1)
         d7_ = self.batch_norm(self.dconv7(self.up(self.relu(d6))))
         # state size is (num_filters) x 128 x 128
         # d7_ = torch.Tensor(e1.data.new(e1.size()).normal_(0, 0.5))
-        crop = self.center_crop(e1, d7_.shape[2:])
         d7 = torch.cat((d7_, e1), 1)
         d8 = self.dconv8(self.up(self.relu(d7)))
         # state size is (nc) x 256 x 256
