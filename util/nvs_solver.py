@@ -141,16 +141,16 @@ class NVS_Solver(object):
         # WRITE LOSSES
         for loss in loss_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Loss/' + loss,
-                                   loss_dir[loss].data.cpu().numpy(),
+                                   loss_dir[loss].detach().cpu().numpy(),
                                    idx)
         self.writer.flush()
 
         # WRITE ACCS
         for acc in acc_dir.keys():
             self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
-                                   acc_dir[acc].data.cpu().numpy(),
+                                   acc_dir[acc].detach().data.cpu().numpy(),
                                    idx)
-        return loss_dir['Total Loss'].data.cpu().numpy(), acc_dir["ssim"].data.cpu().numpy() # could also use acc_dir["psnr"]
+        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["ssim"].detach().cpu().numpy() # could also use acc_dir["psnr"]
 
     def log_epoch_loss_and_acc(self, train_loss, val_loss, train_acc, val_acc, idx):
         self.train_loss_history.append(train_loss)
