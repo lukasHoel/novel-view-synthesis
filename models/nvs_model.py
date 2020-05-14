@@ -78,7 +78,9 @@ class NovelViewSynthesisModel(nn.Module):
         # ENCODER
         # Encode features to a given resolution
         self.encoder = FeatureNet(res_block_dims=self.enc_dims,
-                                  res_block_types=self.enc_blk_types)
+                                  res_block_types=self.enc_blk_types,
+                                  noisy_bn=self.enc_noisy_bn,
+                                  spectral_norm=self.enc_spectral_norm)
 
         # POINT CLOUD TRANSFORMER
         # REGRESS 3D POINTS
@@ -121,8 +123,8 @@ class NovelViewSynthesisModel(nn.Module):
         self.projector = RefineNet(res_block_dims=self.dec_dims,
                                    res_block_types=self.dec_blk_types,
                                    activate_out=self.dec_activation_func,
-                                   noisy_bn=self.dec_noisy_bn)
-                                   #activate_out=nn.Tanh())
+                                   noisy_bn=self.dec_noisy_bn,
+                                   spectral_norm=self.dec_spectral_norm)
 
 
         # TODO WHERE IS THIS NEEDED?
@@ -147,13 +149,11 @@ class NovelViewSynthesisModel(nn.Module):
                 output_RT_inv,
                 gt_img=None,
                 depth_img=None):
-
         # ENCODE IMAGE
         if self.use_rgb_features:
             img_features = input_img
         else:
             img_features = self.encoder(input_img)
-
         # GET DEPTH
         if not self.use_gt_depth:
             # predict depth
@@ -172,7 +172,6 @@ class NovelViewSynthesisModel(nn.Module):
             if depth_img is None:
                 raise ValueError("depth_img must not be None when using gt_depth")
             regressed_pts = depth_img
-
         #img_features.requires_grad = True # use when no other network is used, but backprop should still work (even though doing nothing).
 
         # APPLY TRANSFORMATION and REPROJECT
@@ -186,7 +185,6 @@ class NovelViewSynthesisModel(nn.Module):
             output_RT,
             output_RT_inv,
         )
-
         # TODO is this the class that takes care of ambiguous depth after reprojection?
         '''
         if "modifier" in self.opt.depth_predictor_type:
@@ -196,7 +194,6 @@ class NovelViewSynthesisModel(nn.Module):
         # DECODE IMAGE
         transformed_img = self.projector(transformed_img_features)
         #transformed_img = transformed_img_features # use this when refinement network should not be used
-
         #print(transformed_img.shape)
         #print(torch.min(transformed_img))
         #print(torch.max(transformed_img))
