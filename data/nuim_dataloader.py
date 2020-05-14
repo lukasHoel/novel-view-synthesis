@@ -126,7 +126,8 @@ class ICLNUIMDataset(Dataset):
 
         # convert to image plane depth by taking into account the position in the WxH array as (x, y)
         if self.depth_to_image_plane:
-            depth = np.fromfunction(lambda x, y: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
+            # use (y,x) as input to lambda because the depth.shape is also in (y,x) format.
+            depth = np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
         # invert depth
         if self.inverse_depth:
