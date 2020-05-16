@@ -4,133 +4,88 @@ import torch.nn as nn
 EPS = 1e-2
 
 def get_splatter(
-        name, size, C, points_per_pixel, learn_feature, radius, rad_pow, accumulation, accumulation_tau
+        name, depth_values, opt=None, size=256, C=3, points_per_pixel=8
 ):
     if name == "xyblending":
         from projection.z_buffer_layers import RasterizePointsXYsBlending
 
         return RasterizePointsXYsBlending(
             C=C,
-            learn_feature=learn_feature,
-            radius=radius,
-            rad_pow=rad_pow,
+            # learn_feature=opt.learn_default_feature,
+            # radius=opt.radius,
             size=size,
             points_per_pixel=points_per_pixel,
-            accumulation=accumulation,
-            accumulation_tau=accumulation_tau
+            # opts=opt,
+            accumulation_tau=1
         )
+    # TODO: think about adding new parameters from the adapted version of this class (due to removal of opt...)
+    # New parameters are: rad_pow, accumulation, accumulation_tau (see also paper equations 1 and 2)
 
     else:
         raise NotImplementedError()
 
 
 class PtsManipulator(nn.Module):
-    def __init__(self,
-                 imageSize,
-                 C,
-                 learn_feature=True,
-                 radius=1.5,
-                 points_per_pixel=8,
-                 accumulation_tau=1,
-                 rad_pow=2,
-                 accumulation='alphacomposite'
-                 ):
+    def __init__(self, W, H, C=3):
         super().__init__()
 
         self.splatter = get_splatter(
-            name="xyblending",
-            size=imageSize,
-            C=C,
-            points_per_pixel=points_per_pixel,
-            learn_feature=learn_feature,
-            radius=radius,
-            rad_pow=rad_pow,
-            accumulation=accumulation,
-            accumulation_tau=accumulation_tau
+            "xyblending", None, size=W, C=C, points_per_pixel=8
         )
 
-        # create coordinate system for x and y
-        xs = torch.linspace(0, imageSize - 1, imageSize) / float(imageSize - 1) * 2 - 1
-        ys = torch.linspace(0, imageSize - 1, imageSize) / float(imageSize - 1) * 2 - 1
+        self.img_shape = (H, W)
 
-        xs = xs.view(1, 1, 1, imageSize).repeat(1, 1, imageSize, 1)
-        ys = ys.view(1, 1, imageSize, 1).repeat(1, 1, 1, imageSize)
+        # create coordinate system for x and y
+        xs = torch.linspace(0, W - 1, W)
+        ys = torch.linspace(0, H - 1, H)
+
+        xs = xs.view(1, 1, 1, W).repeat(1, 1, H, 1)
+        ys = ys.view(1, 1, H, 1).repeat(1, 1, 1, W)
 
         # build homogeneous coordinate system with [X, Y, 1, 1] to prepare for depth
         xyzs = torch.cat(
-            (xs, -ys, -torch.ones(xs.size()), torch.ones(xs.size())), 1
+            (xs, ys, torch.ones(xs.size()), torch.ones(xs.size())), 1
         ).view(1, 4, -1)
 
         self.register_buffer("xyzs", xyzs)
 
     def project_pts(
-            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, colors=None
     ):
-        # add Zs to the coordinate system        
-        # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image (should be inverted?)
+        # add Zs to the coordinate system
+        # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image
         projected_coors = self.xyzs * pts3D
         projected_coors[:, -1, :] = 1
 
         # Transform into camera coordinate of the first view
         cam1_X = K_inv.bmm(projected_coors)
 
-        # Transform to World Coordinates and apply transformation to second view
-        RT = RT_cam2.bmm(RTinv_cam1)
-        wrld_X = RT.bmm(cam1_X)
+        # Transform to World Coordinates with RT of input view
+        wrld_X = RT_cam1.bmm(cam1_X)
 
-        # Apply intrinsics
-        xy_proj = K.bmm(wrld_X)
+        # Transform from World coordinates to camera of output view
+        new_coors = RTinv_cam2.bmm(wrld_X)
+
+        # Apply intrinsics / go back to image plane
+        xy_proj = K.bmm(new_coors)
 
         # remove invalid zs that cause nans
         mask = (xy_proj[:, 2:3, :].abs() < EPS).detach()
         zs = xy_proj[:, 2:3, :]
         zs[mask] = EPS
 
-        # xy_proj[:, 0:2, :] are all (x,y) coordinates --> divide them through -z coordinate
-        # xy_proj[:, 2:3, :] are all z coordinates
         # here we concatenate (x,y) / -z and the original z-coordinate into a new (x,y,z) vector
-        sampler = torch.cat((xy_proj[:, 0:2, :] / -zs, xy_proj[:, 2:3, :]), 1)
+        sampler = torch.cat((xy_proj[:, 0:2, :] / zs, xy_proj[:, 2:3, :]), 1)
+
+        # rescale coordinates to work with splatting and move to origin
+        sampler[:, 0, :] = sampler[:, 0, :] / float(self.img_shape[1] - 1) * 2 - 1
+        sampler[:, 1, :] = sampler[:, 1, :] / float(self.img_shape[0] - 1) * 2 - 1
 
         # here we set (x,y,z) to -10 where we have invalid zs that cause nans
         sampler[mask.repeat(1, 3, 1)] = -10
-        # Flip the ys
-        sampler = sampler * torch.Tensor([1, -1, -1]).unsqueeze(0).unsqueeze(2).to(sampler.device)
 
-        # Normalize x and y to [-1,1] range
-        '''
-        min_x = torch.min(sampler[:, 0, :], dim=1)
-        #print("MIN_X: ", min_x)
-        max_x = torch.max(sampler[:, 0, :], dim=1)
-        #print("MAX_X: ", max_x)
-        sampler[:, 0, :] = 2 * (sampler[:, 0, :] - min_x.values) / (max_x.values - min_x.values) - 1
-        #min_x = torch.min(sampler[:, 0, :], dim=1)
-        #print("MIN_X: ", min_x)
-        #max_x = torch.max(sampler[:, 0, :], dim=1)
-        #print("MAX_X: ", max_x)
-
-        min_y = torch.min(sampler[:, 1, :], dim=1)
-        #print("MIN_Y: ", min_y)
-        max_y = torch.max(sampler[:, 1, :], dim=1)
-        #print("MAX_Y: ", max_y)
-        sampler[:, 1, :] = 2 * (sampler[:, 1, :] - min_y.values) / (max_y.values - min_y.values) - 1
-        #min_y = torch.min(sampler[:, 1, :], dim=1)
-        #print("MIN_Y: ", min_y)
-        #max_y = torch.max(sampler[:, 1, :], dim=1)
-        #print("MAX_Y: ", max_y)
-        '''
-
-        # normalize z to [0,1]
-        '''
-        min_z = torch.min(sampler[:, 2, :], dim=1)
-        print("MIN_Z: ", min_z)
-        max_z = torch.max(sampler[:, 2, :], dim=1)
-        print("MAX_Z: ", max_z)
-        sampler[:, 2, :] = (sampler[:, 2, :] - min_z.values)/(max_z.values-min_z.values)
-        min_z = torch.min(sampler[:, 2, :], dim=1)
-        print("MIN_Z: ", min_z)
-        max_z = torch.max(sampler[:, 2, :], dim=1)
-        print("MAX_Z: ", max_z)
-        '''
+        # Don't flip the ys
+        # sampler = sampler * torch.Tensor([1, 1, 1]).unsqueeze(0).unsqueeze(2).to(sampler.device)
 
         return sampler
 
