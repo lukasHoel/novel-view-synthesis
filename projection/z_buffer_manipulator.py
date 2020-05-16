@@ -26,7 +26,7 @@ def get_splatter(
 
 
 class PtsManipulator(nn.Module):
-    def __init__(self, W, H, C=3):
+    def __init__(self, W=640, H=480, C=3):
         super().__init__()
 
         self.splatter = get_splatter(
