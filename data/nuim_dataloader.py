@@ -14,6 +14,13 @@ class ToNumpy(object):
     def __call__(self, sample):
         return np.array(sample)
 
+class ClipDepth(object):
+    '''Set maximal depth'''
+
+    def __call__(self, sample):
+        sample[sample>10] = 10.0
+        return sample
+
 class ICLNUIMDataset(Dataset):
     '''
     Loads samples from the pre-rendered NUIM dataset: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
@@ -78,6 +85,7 @@ class ICLNUIMDataset(Dataset):
             self.transform_depth = torchvision.transforms.Compose([
                 *self.transform.transforms[:-1],
                 ToNumpy(),
+                ClipDepth(),
                 torchvision.transforms.ToTensor()
             ])
         else:

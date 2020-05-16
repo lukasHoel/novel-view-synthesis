@@ -4,33 +4,49 @@ import torch.nn as nn
 EPS = 1e-2
 
 def get_splatter(
-        name, depth_values, opt=None, size=256, C=3, points_per_pixel=8
+        name, size, C, points_per_pixel, learn_feature, radius, rad_pow, accumulation, accumulation_tau
 ):
     if name == "xyblending":
         from projection.z_buffer_layers import RasterizePointsXYsBlending
 
         return RasterizePointsXYsBlending(
             C=C,
-            # learn_feature=opt.learn_default_feature,
-            # radius=opt.radius,
+            learn_feature=learn_feature,
+            radius=radius,
+            rad_pow=rad_pow,
             size=size,
             points_per_pixel=points_per_pixel,
-            # opts=opt,
-            accumulation_tau=1
+            accumulation=accumulation,
+            accumulation_tau=accumulation_tau
         )
-    # TODO: think about adding new parameters from the adapted version of this class (due to removal of opt...)
-    # New parameters are: rad_pow, accumulation, accumulation_tau (see also paper equations 1 and 2)
 
     else:
         raise NotImplementedError()
 
-
 class PtsManipulator(nn.Module):
-    def __init__(self, W=640, H=480, C=3):
+    def __init__(self,
+                 W=640,
+                 H=480,
+                 C=3,
+                 learn_feature=True,
+                 radius=1.5,
+                 points_per_pixel=8,
+                 accumulation_tau=1,
+                 rad_pow=2,
+                 accumulation='alphacomposite'
+                 ):
         super().__init__()
 
         self.splatter = get_splatter(
-            "xyblending", None, size=W, C=C, points_per_pixel=8
+            name="xyblending",
+            size=W,
+            C=C,
+            points_per_pixel=points_per_pixel,
+            learn_feature=learn_feature,
+            radius=radius,
+            rad_pow=rad_pow,
+            accumulation=accumulation,
+            accumulation_tau=accumulation_tau
         )
 
         self.img_shape = (H, W)
