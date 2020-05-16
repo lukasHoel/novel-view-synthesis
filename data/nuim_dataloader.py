@@ -53,7 +53,8 @@ class ICLNUIMDataset(Dataset):
                  RTrelativeToOutput=False,
                  inverse_depth=False,
                  cacheItems=False,
-                 transform=None):
+                 transform=None,
+                 out_shape=(480,640)):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
@@ -67,7 +68,11 @@ class ICLNUIMDataset(Dataset):
         :param use_real_intrinsics: If true, return the K and Kinv matrix from ICL dataset. If false return identity matrix.
         '''
         self.transform = transform
-
+        if 'Resize' in str(transform):
+            self.Resize = True
+        else:
+            self.Resize = False
+        self.out_shape = out_shape
         # Fix for this issue: https://github.com/pytorch/vision/issues/2194
         if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
             self.transform_depth = torchvision.transforms.Compose([
@@ -126,7 +131,8 @@ class ICLNUIMDataset(Dataset):
 
         # convert to image plane depth by taking into account the position in the WxH array as (x, y)
         if self.depth_to_image_plane:
-            depth = np.fromfunction(lambda x, y: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
+            # use (y,x) as input to lambda because the depth.shape is also in (y,x) format.
+            depth = np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
         # invert depth
         if self.inverse_depth:
@@ -158,6 +164,20 @@ class ICLNUIMDataset(Dataset):
         #RTinv = np.vstack([RTinv, [0, 0, 0, 1]])  # if (0 0 0 1) row is needed
 
         # Code to calculate K - unnecessary because K is constant. taken from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/getcamK.m
+        if self.Resize:
+            K2 = torch.from_numpy(np.zeros((4,4)).astype(np.float32))
+            K2[0,0] = 0.751875 * self.out_shape[1]      #cam_K2['fx']
+            K2[1,1] = -1.0 * self.out_shape[0]          #cam_K2['fy']
+            K2[0,2] = 0.5 * self.out_shape[1]           #cam_K2['cx']
+            K2[1,2] = 0.5 * self.out_shape[0]           #cam_K2['cy']
+            K2[2,2] = 1
+            K2[3,3] = 1 # we use 4x4 matrix for easier backward-calculations without removing indices, see projection/z_buffer_manipulator.py
+
+            K2inv = torch.from_numpy(np.zeros((4,4)).astype(np.float32))
+            K2inv[:3,:3] = invert_K(K2[:3,:3])
+            K2inv[3,3] = 1
+
+            return RT, RTinv, K2, K2inv
         '''
         focal = np.linalg.norm(cam["cam_dir"])
         aspect = np.linalg.norm(cam["cam_right"]) / np.linalg.norm(cam["cam_up"])
@@ -188,7 +208,7 @@ class ICLNUIMDataset(Dataset):
         print(K)
         '''
 
-        return RT, RTinv
+        return RT, RTinv, ICLNUIMDataset.K, ICLNUIMDataset.Kinv
 
     def __getitem__(self, idx):
         """
@@ -240,13 +260,13 @@ class ICLNUIMDataset(Dataset):
         #print("Depth loading took {}".format(time() - start))
 
 
-        RT1, RT1inv = self.load_cam(idx)
+        RT1, RT1inv, K, Kinv = self.load_cam(idx)
 
         cam = {
             'RT1': torch.from_numpy(RT1),
             'RT1inv': torch.from_numpy(RT1inv),
-            'K': ICLNUIMDataset.K if self.use_real_intrinsics else torch.eye(4),
-            'Kinv': ICLNUIMDataset.Kinv if self.use_real_intrinsics else torch.eye(4)
+            'K': K if self.use_real_intrinsics else torch.eye(4),
+            'Kinv': Kinv if self.use_real_intrinsics else torch.eye(4)
         }
 
         output = None
@@ -256,9 +276,10 @@ class ICLNUIMDataset(Dataset):
 
             # load image of new index
             output_image = self.load_image(output_idx)
+            output_depth = self.load_depth(output_idx)
 
             # load cam of new index
-            RT2, RT2inv = self.load_cam(output_idx)
+            RT2, RT2inv, K2, K2inv = self.load_cam(output_idx)
 
             if self.RTrelativeToOutput:
                 #calculate relative RT matrix
@@ -295,6 +316,7 @@ class ICLNUIMDataset(Dataset):
 
             output = {
                 'image': output_image,
+                'depth': output_depth,
                 'idx': output_idx
             }
 
@@ -311,6 +333,7 @@ class ICLNUIMDataset(Dataset):
             sample['depth'] = self.transform_depth(sample['depth'])
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
+                sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
 
         if self.cacheItems:
             self.itemCache[idx] = sample
