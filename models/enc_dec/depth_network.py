@@ -8,10 +8,11 @@ class Unet(nn.Module):
     """
 
     def __init__(
-        self,
-        num_filters=32,
-        channels_in=3,
-        channels_out=1,
+            self,
+            num_filters=32,
+            channels_in=3,
+            channels_out=1,
+            img_shape=256
     ):
         super(Unet, self).__init__()
 
@@ -29,6 +30,7 @@ class Unet(nn.Module):
         # input channels * 2 because of U-Net architecture
         self.dconv1 = nn.Conv2d(num_filters * 8, num_filters * 8, kernel_size=3, stride=1, padding=1)
         self.dconv2 = nn.Conv2d(num_filters * 8 * 2, num_filters * 8, kernel_size=3, stride=1, padding=1)
+        self.dconv3 = nn.Conv2d(num_filters * 8 * 2, num_filters * 8, kernel_size=3, stride=1, padding=1)
         self.dconv3 = nn.Conv2d(num_filters * 8 * 2, num_filters * 8, kernel_size=3, stride=1, padding=1)
         self.dconv4 = nn.Conv2d(num_filters * 8 * 2, num_filters * 8, kernel_size=3, stride=1, padding=1)
         self.dconv5 = nn.Conv2d(num_filters * 8 * 2, num_filters * 4, kernel_size=3, stride=1, padding=1)
@@ -67,41 +69,73 @@ class Unet(nn.Module):
         e4 = self.batch_norm8_0(self.conv4(self.leaky_relu(e3)))
         # state size is (num_filters x 8) x 16 x 16
         e5 = self.batch_norm8_1(self.conv5(self.leaky_relu(e4)))
-        # state size is (num_filters x 8) x 8 x 8
-        e6 = self.batch_norm8_2(self.conv6(self.leaky_relu(e5)))
-        # state size is (num_filters x 8) x 4 x 4
-        e7 = self.batch_norm8_3(self.conv7(self.leaky_relu(e6)))
-        # state size is (num_filters x 8) x 2 x 2
-        # No batch norm on output of Encoder
-        e8 = self.conv8(self.leaky_relu(e7))
+        if input.shape[-1] > 128:
+            e6 = self.batch_norm8_2(self.conv6(self.leaky_relu(e5)))
+            e7 = self.batch_norm8_3(self.conv7(self.leaky_relu(e6)))
+            e8 = self.conv8(self.leaky_relu(e7))
+        elif input.shape[-1] > 64:
+            e6 = self.batch_norm8_2(self.conv6(self.leaky_relu(e5)))
+            e7 = self.conv7(self.leaky_relu(e6))
+        else:
+            e6 = self.conv6(self.leaky_relu(e5))
 
         # Decoder
         # Deconvolution layers:
         # state size is (num_filters x 8) x 1 x 1
-        d1_ = self.batch_norm8_4(self.dconv1(self.up(self.relu(e8))))
-        # state size is (num_filters x 8) x 2 x 2
-        d1 = torch.cat((d1_, e7), 1)
-        d2_ = self.batch_norm8_5(self.dconv2(self.up(self.relu(d1))))
-        # state size is (num_filters x 8) x 4 x 4
-        d2 = torch.cat((d2_, e6), 1)
-        d3_ = self.batch_norm8_6(self.dconv3(self.up(self.relu(d2))))
-        # state size is (num_filters x 8) x 8 x 8
-        d3 = torch.cat((d3_, e5), 1)
-        d4_ = self.batch_norm8_7(self.dconv4(self.up(self.relu(d3))))
-        # state size is (num_filters x 8) x 16 x 16
-        d4 = torch.cat((d4_, e4), 1)
-        d5_ = self.batch_norm4_1(self.dconv5(self.up(self.relu(d4))))
-        # state size is (num_filters x 4) x 32 x 32
-        d5 = torch.cat((d5_, e3), 1)
-        d6_ = self.batch_norm2_1(self.dconv6(self.up(self.relu(d5))))
-        # state size is (num_filters x 2) x 64 x 64
-        d6 = torch.cat((d6_, e2), 1)
-        d7_ = self.batch_norm(self.dconv7(self.up(self.relu(d6))))
-        # state size is (num_filters) x 128 x 128
-        # d7_ = torch.Tensor(e1.data.new(e1.size()).normal_(0, 0.5))
-        d7 = torch.cat((d7_, e1), 1)
-        d8 = self.dconv8(self.up(self.relu(d7)))
-        # state size is (nc) x 256 x 256
-        #output = self.tanh(d8)
-        #print(d8)
+        if input.shape[-1] > 128:
+            d1_ = self.batch_norm8_4(self.dconv1(self.up(self.relu(e8))))
+            d1 = torch.cat((d1_, e7), 1)
+            d2_ = self.batch_norm8_5(self.dconv2(self.up(self.relu(d1))))
+            d2 = torch.cat((d2_, e6), 1)
+            d3_ = self.batch_norm8_6(self.dconv3(self.up(self.relu(d2))))
+            d3 = torch.cat((d3_, e5), 1)
+            d4_ = self.batch_norm8_7(self.dconv4(self.up(self.relu(d3))))
+            # state size is (num_filters x 8) x 16 x 16
+            d4 = torch.cat((d4_, e4), 1)
+            d5_ = self.batch_norm4_1(self.dconv5(self.up(self.relu(d4))))
+            # state size is (num_filters x 4) x 32 x 32
+            d5 = torch.cat((d5_, e3), 1)
+            d6_ = self.batch_norm2_1(self.dconv6(self.up(self.relu(d5))))
+            # state size is (num_filters x 2) x 64 x 64
+            d6 = torch.cat((d6_, e2), 1)
+            d7_ = self.batch_norm(self.dconv7(self.up(self.relu(d6))))
+            # state size is (num_filters) x 128 x 128
+            # d7_ = torch.Tensor(e1.data.new(e1.size()).normal_(0, 0.5))
+            d7 = torch.cat((d7_, e1), 1)
+            d8 = self.dconv8(self.up(self.relu(d7)))
+            # state size is (nc) x 256 x 256
+            # output = self.tanh(d8)
+            # print(d8)
+        elif input.shape[-1] > 64:
+            d1_ = self.batch_norm8_4(self.dconv1(self.up(self.relu(e7))))
+            d1 = torch.cat((d1_, e6), 1)
+            d2_ = self.batch_norm8_6(self.dconv3(self.up(self.relu(d1))))
+            d2 = torch.cat((d2_, e5), 1)
+            d3_ = self.batch_norm8_7(self.dconv4(self.up(self.relu(d2))))
+            d3 = torch.cat((d3_, e4), 1)
+            d4_ = self.batch_norm4_1(self.dconv5(self.up(self.relu(d3))))
+            d4 = torch.cat((d4_, e3), 1)
+            d5_ = self.batch_norm2_1(self.dconv6(self.up(self.relu(d4))))
+            d5 = torch.cat((d5_, e2), 1)
+            d6_ = self.batch_norm(self.dconv7(self.up(self.relu(d5))))
+            d6 = torch.cat((d6_, e1), 1)
+            d7 = self.dconv8(self.up(self.relu(d6)))
+
+            return d7
+
+        else:
+            d1_ = self.batch_norm8_4(self.dconv1(self.up(self.relu(e6))))
+            d1 = torch.cat((d1_, e5), 1)
+            d2_ = self.batch_norm8_7(self.dconv4(self.up(self.relu(d1))))
+            d2 = torch.cat((d2_, e4), 1)
+            d3_ = self.batch_norm4_1(self.dconv5(self.up(self.relu(d2))))
+            d3 = torch.cat((d3_, e3), 1)
+            d4_ = self.batch_norm2_1(self.dconv6(self.up(self.relu(d3))))
+            d4 = torch.cat((d4_, e2), 1)
+            d5_ = self.batch_norm(self.dconv7(self.up(self.relu(d4))))
+            d5 = torch.cat((d5_, e1), 1)
+            d6 = self.dconv8(self.up(self.relu(d5)))
+
+            return d6
+
         return d8
