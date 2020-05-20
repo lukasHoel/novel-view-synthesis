@@ -198,6 +198,7 @@ class NVS_Solver(object):
                 input_batch = input_batch.unsqueeze(0)
                 target_batch = target_batch.unsqueeze(0)
                 pred_batch = pred_batch.unsqueeze(0)
+                depth_batch = depth_batch.unsqueeze(0)
             
             if len(pred_batch.shape) != 4:
                 print("Only 3D or 4D tensors can be visualized")
@@ -208,6 +209,7 @@ class NVS_Solver(object):
                 input_batch = input_batch[take_slice[0], take_slice[1]]
                 target_batch = target_batch[take_slice[0], take_slice[1]]
                 pred_batch = pred_batch[take_slice[0], take_slice[1]]
+                depth_batch = depth_batch[take_slice[0], take_slice[1]]
                 
             # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
             img_lst = torch.Tensor()
@@ -218,9 +220,13 @@ class NVS_Solver(object):
                 # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
                 # Order in img_list defines the layout. 
                 # Current layout: input - target - pred at each row
-                img_lst = torch.cat((img_lst, input_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0), pred_batch[i].unsqueeze(0)), dim=0)
+                img_lst = torch.cat((img_lst, 
+                    input_batch[i].unsqueeze(0), 
+                    target_batch[i].unsqueeze(0), 
+                    pred_batch[i].unsqueeze(0),
+                    depth_batch[i].unsqueeze(0)), dim=0)
             
-            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack 
+            img_grid = make_grid(img_lst, nrow=4) # Per row, pick three images from the stack 
             # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
