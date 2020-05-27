@@ -93,6 +93,8 @@ private:
         vector<unsigned int> indices;
         vector<Texture> textures;
 
+        // std::cout << mesh->mName.data << " " << rgb[0] << " " << rgb[1] << " " << rgb[2] << std::endl;
+
         // Walk through each of the mesh's vertices
         for(unsigned int i = 0; i < mesh->mNumVertices; i++)
         {
@@ -120,7 +122,7 @@ private:
                 vector.y = mesh->mColors[0][i].g;
                 vector.z = mesh->mColors[0][i].b;
                 vertex.Color = vector;
-                // std::cout << "Colors" << std::endl;
+                // std::cout << "Colors from file" << std::endl;
             }
             
             // texture coordinates
@@ -154,7 +156,11 @@ private:
                 vertex.Bitangent = vector;
                 // std::cout << "Bitangent" << std::endl;
             }
-            
+
+            // Name
+            vertex.Name = std::string(mesh->mName.data);
+        
+            // Create vertex    
             vertices.push_back(vertex);
 
             // std::cout << "add vertex" << std::endl;
@@ -170,6 +176,7 @@ private:
         }
 
         // process materials
+        
         if (mesh->mMaterialIndex >= 0) {
             aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];    
             // we assume a convention for sampler names in the shaders. Each diffuse texture should be named
@@ -192,6 +199,7 @@ private:
             std::vector<Texture> heightMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height");
             textures.insert(textures.end(), heightMaps.begin(), heightMaps.end());
         }
+        
         
         // return a mesh object created from the extracted mesh data
         return Mesh(vertices, indices, textures);
@@ -219,6 +227,7 @@ private:
             }
             if(!skip)
             {   // if texture hasn't been loaded already, load it
+
                 Texture texture;
                 texture.id = TextureFromFile(str.C_Str(), this->directory);
                 texture.type = typeName;
@@ -237,7 +246,7 @@ private:
 
         unsigned int textureID;
         glGenTextures(1, &textureID);
-        
+
         cv::Mat image = cv::imread(filename.c_str());
 
         glBindTexture(GL_TEXTURE_2D, textureID);

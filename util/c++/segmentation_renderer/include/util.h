@@ -25,4 +25,4 @@ glm::mat4 perspective(glm::mat3& intrinsics, int width, int height, double n, do
     return res;
 }
 
-}; // namespace camera_utils
+} // namespace camera_utils

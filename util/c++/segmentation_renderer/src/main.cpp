@@ -1,9 +1,13 @@
 #include <iostream>
 
-#include "renderer.h"
-#include "segmentation_provider.h"
-#include "mp.h"
-#include "mesh_transformer.h"
+#include "icl_renderer.h"
+#include "icl_parser.h"
+#include "icl_segmentation_provider.h"
+
+//#include "mp_renderer.h"
+//#include "mp_parser.h"
+//#include "segmentation_provider.h"
+//#include "mesh_transformer.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -23,6 +27,22 @@
 */
 
 int main(int argc, char** argv){
+
+    ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop", 0);
+
+    ICL_Renderer icl_renderer("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
+
+    ICL_Segmentation_Provider icl_sp("../src/icl_nuim/object_to_color.txt");
+
+    for(auto& mesh : icl_renderer.m_model->meshes){
+        icl_sp.change_colors(mesh);
+    }
+
+    //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
+    //icl_renderer.renderInteractive();
+    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop/seg");
+
+    /*
     if(argc != 3){
         std::cout << "Usage: " << argv[0] << " path/to/Matterport3D/data/v1/scans <scanID>" << std::endl;
         return EXIT_FAILURE;
@@ -41,7 +61,7 @@ int main(int argc, char** argv){
 
         regionPath += "/region0."; // TODO instead loop over all regions!
 
-        Renderer renderer(regionPath + "ply", mp, 0);
+        MP_Renderer renderer(regionPath + "ply", mp, 0);
 
         std::cout << "Renderer initialized" << std::endl;
 
@@ -78,6 +98,7 @@ int main(int argc, char** argv){
         std::cerr << "Caught exception: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }
+    */
     
 
     return EXIT_SUCCESS;
