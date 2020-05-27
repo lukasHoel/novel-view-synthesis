@@ -12,7 +12,6 @@ class Unet(nn.Module):
             num_filters=32,
             channels_in=3,
             channels_out=1,
-            img_shape=256
     ):
         super(Unet, self).__init__()
 

@@ -11,7 +11,7 @@ class NovelViewSynthesisModel(nn.Module):
                  imageSize,
 
                  # depth
-                 max_z=0,
+                 max_z=10,
                  min_z=0,
 
                  #enc
@@ -84,7 +84,7 @@ class NovelViewSynthesisModel(nn.Module):
 
         # POINT CLOUD TRANSFORMER
         # REGRESS 3D POINTS
-        self.pts_regressor = Unet(num_filters=32, channels_in=3, channels_out=1, img_shape=imageSize)
+        self.pts_regressor = Unet(num_filters=16, channels_in=3, channels_out=1) # TODO what normalization to use in depth regressor?
 
         # TODO is this the class that takes care of ambiguous depth after reprojection?
         '''

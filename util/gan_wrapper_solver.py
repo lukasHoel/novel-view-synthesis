@@ -28,7 +28,13 @@ class GAN_Wrapper_Solver(object):
                  g_loss_func=None, # if left None, the NVS_Solver will instantiate a standard SynthesisLoss class
                  extra_args={},
                  log_dir=None,
-                 init_discriminator_weights=True):
+                 num_D=3,
+                 size_D=64,
+                 loss_D='ls',
+                 no_gan_feature_loss=False,
+                 init_discriminator_weights=True,
+                 lr_step=10,
+                 lr_gamma=0.1):
         """
 
         Parameters
@@ -39,21 +45,37 @@ class GAN_Wrapper_Solver(object):
         optim_g_args: see also default_adam_args: specify here valid dictionary of arguments for chosen optimizer
         extra_args: extra_args that should be used when logging to tensorboard (e.g. model hyperparameters)
         log_dir: where to log to tensorboard
+        num_D: number of discriminators to use, every discriminator will work with lower resolution.
+        e.g. One discriminator at full resolution and one with input downsampled to half the resolution
+        size_D: number of channels/filters in each Conv2d in discriminator
+        loss_D: the loss that the discriminator uses, options are ls (MSE-Loss), hinge, wgan (Wasserstein-GAN)
+        or original (Cross-Entropy)
         init_discriminator_weights: if weights of the discriminator should be initialized
         """
         optim_d_args_merged = self.default_adam_args.copy()
         optim_d_args_merged.update(optim_d_args)
         self.optim_d_args = optim_d_args_merged
         self.optim_d = optim_d
+        self.lr_step = lr_step
+        self.lr_gamma = lr_gamma
 
         self.writer = SummaryWriter(log_dir)
 
-        self.netD = DiscriminatorLoss(optim_d_args['lr'], init=init_discriminator_weights) # todo other arguments?
+        self.netD = DiscriminatorLoss(optim_d_args['lr'],
+                                      gan_mode=loss_D,
+                                      no_ganFeat_loss=no_gan_feature_loss,
+                                      num_D=num_D,
+                                      ndf=size_D,
+                                      init=init_discriminator_weights)
 
         self.optimizer_D = self.optim_d(
             filter(lambda p: p.requires_grad, self.netD.parameters()),
             **self.optim_d_args
         )
+
+        self.scheduler_D = torch.optim.lr_scheduler.StepLR(self.optimizer_D,
+                                                           step_size=self.lr_step,
+                                                           gamma=self.lr_gamma)
 
         self.nvs_solver = NVS_Solver(optim=optim_g,
                                      optim_args=optim_g_args,
@@ -113,6 +135,10 @@ class GAN_Wrapper_Solver(object):
             filter(lambda p: p.requires_grad, model.parameters()),
             **self.nvs_solver.optim_args
         )
+
+        scheduler_G = torch.optim.lr_scheduler.StepLR(optimizer_G,
+                                                      step_size=self.lr_step,
+                                                      gamma=self.lr_gamma)
 
         self._reset_histories()
         iter_per_epoch = len(train_loader)
@@ -178,6 +204,9 @@ class GAN_Wrapper_Solver(object):
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
                     self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i)
+
+            self.scheduler_D.step()
+            scheduler_G.step()
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
