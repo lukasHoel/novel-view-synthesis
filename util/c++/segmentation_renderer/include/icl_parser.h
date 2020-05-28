@@ -19,6 +19,10 @@ public:
         struct dirent *pDirent;
         DIR *pDir = NULL;
 
+        txtfilecount = 0;
+        pngfilecount = 0;
+        depthfilecount = 0;
+
         pDir = opendir(filebasename.c_str());
         if (pDir != NULL)
         {
@@ -45,7 +49,7 @@ public:
         }
 
         if ( txtfilecount != pngfilecount || txtfilecount != depthfilecount || pngfilecount != depthfilecount) {
-            std::cerr << "Warning: The number of depth files, png files and txt files are not same." << std::endl;
+            std::cerr << "Warning: The number of depth files (" << depthfilecount << "), png files (" << pngfilecount << ") and txt files (" << txtfilecount << ") are not same." << std::endl;
         }
 
     }

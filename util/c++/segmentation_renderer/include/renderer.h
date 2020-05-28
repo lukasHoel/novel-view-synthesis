@@ -21,7 +21,7 @@ constexpr float kFarPlane{10.0f};
 
 class Renderer {
 public:
-    Renderer(string const &pathToMesh);
+    Renderer(string const &pathToMesh, int width, int height);
     ~Renderer();
     void renderInteractive();
     int init();

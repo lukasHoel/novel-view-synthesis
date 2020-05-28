@@ -2,10 +2,12 @@
 #include "util.h"
 
 MP_Renderer::MP_Renderer(string const &pathToMesh, MP_Parser const &mp_parser, int region_index): 
-                    mp_parser(mp_parser), region_index(region_index), Renderer(pathToMesh) {
+                    mp_parser(mp_parser),
+                    region_index(region_index),
+                    Renderer(pathToMesh,
+                             mp_parser.regions[region_index]->panoramas[0]->images[0]->width,
+                             mp_parser.regions[region_index]->panoramas[0]->images[0]->height) {
 
-    m_buffer_width = mp_parser.regions[region_index]->panoramas[0]->images[0]->width;
-    m_buffer_height = mp_parser.regions[region_index]->panoramas[0]->images[0]->height;
 }
 
 MP_Renderer::~MP_Renderer() = default;

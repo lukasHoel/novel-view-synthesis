@@ -7,7 +7,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(-0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f
 float lastX = DEF_WIDTH / 2.0f;
 float lastY = DEF_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -16,7 +16,10 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-Renderer::Renderer(string const &pathToMesh) {  
+Renderer::Renderer(string const &pathToMesh, int width, int height) {  
+    m_buffer_width = width;
+    m_buffer_height = height;
+
     if(init()){
         // if init fails, then the return code is != 0 which is equal to this if statement
         throw std::runtime_error("Failed to init renderer");
@@ -135,7 +138,7 @@ void Renderer::renderInteractive(){
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
+        //model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
 
         // render
         // ------

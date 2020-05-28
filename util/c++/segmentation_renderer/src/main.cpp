@@ -28,7 +28,7 @@
 
 int main(int argc, char** argv){
 
-    ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop", 0);
+    ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop", 0);
 
     ICL_Renderer icl_renderer("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
 
