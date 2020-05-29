@@ -7,7 +7,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 // camera
-Camera camera(glm::vec3(-0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f
+Camera camera(glm::vec3(0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f
 float lastX = DEF_WIDTH / 2.0f;
 float lastY = DEF_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -133,11 +133,15 @@ void Renderer::renderInteractive(){
         
         // model/view/projection transformations
         // ------
-
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)DEF_WIDTH / (float)DEF_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)m_buffer_width / (float)m_buffer_height, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
+
+        //model = glm::scale(model, glm::vec3(1, 1, -1));
+        //model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        //model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0, 0.0, 0.0));
+
+        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
         //model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
 
         // render

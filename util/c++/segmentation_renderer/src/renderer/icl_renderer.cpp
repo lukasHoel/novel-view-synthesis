@@ -14,7 +14,7 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         glm::mat4 extr = ip.getExtrinsics(i);
         glm::mat3 intr = ip.getIntrinsics();
 
-        extr = glm::inverse(extr);
+        //extr = glm::inverse(extr);
         //intr = glm::inverse(intr);
 
         //extr = glm::transpose(extr);
@@ -35,15 +35,24 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         std::cout << glm::to_string(extr) << std::endl;
 
         glm::mat4 trans = glm::mat4(1.0f);
-        //trans = glm::translate(trans, glm::vec3(-1.3705f, -1.51739f, -1.44963f));
+        //trans = glm::translate(trans, glm::vec3(0.3f, 0.3f, 0.3f));
         //trans = glm::translate(trans, glm::vec3(-0.108f, -1.3f, -2.814f));
         
 
         // THIS ONE FROM PAPER
         //trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-        trans = glm::scale(trans, glm::vec3(1, 1, -1));
 
+        //trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0));
+        trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        //trans = glm::scale(trans, glm::vec3(1, 1, -1));
+        //trans = glm::inverse(trans);
 
+        //trans = glm::inverse(glm::scale(trans, glm::vec3(1, 1, -1)));
+        //trans = glm::inverse(glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0)));
+        //trans = glm::inverse(glm::rotate(trans, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0)));
+
+        extr = glm::mat4(1.0f);
+        extr = glm::translate(extr, glm::vec3(0.790932f, 1.300000f, 1.462270f));
 
         //trans = glm::rotate(trans, glm::radians(270.0f), glm::vec3(1.0, 0.0, 0.0));
         //trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(0.0, 0.0, 1.0));

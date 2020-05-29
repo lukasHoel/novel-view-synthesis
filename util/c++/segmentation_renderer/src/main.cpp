@@ -2,6 +2,7 @@
 
 #include "icl_renderer.h"
 #include "icl_parser.h"
+#include "icl_mesh_transformer.h"
 #include "icl_segmentation_provider.h"
 
 //#include "mp_renderer.h"
@@ -34,13 +35,18 @@ int main(int argc, char** argv){
 
     ICL_Segmentation_Provider icl_sp("../src/icl_nuim/object_to_color.txt");
 
+    glm::mat4 t(1.0f);
+    t = glm::translate(t, glm::vec3(0.3f, 0.3f, 0.3f));
+
     for(auto& mesh : icl_renderer.m_model->meshes){
         icl_sp.change_colors(mesh);
+        ICL_Mesh_Transformer icl_mt(mesh);
+        icl_mt.moveVerticesOfObject("chair1_seat_chair1_seat", t);
     }
 
     //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
-    //icl_renderer.renderInteractive();
-    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop/seg");
+    icl_renderer.renderInteractive();
+    //icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop/seg");
 
     /*
     if(argc != 3){
