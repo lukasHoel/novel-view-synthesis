@@ -41,12 +41,12 @@ int main(int argc, char** argv){
     for(auto& mesh : icl_renderer.m_model->meshes){
         icl_sp.change_colors(mesh);
         ICL_Mesh_Transformer icl_mt(mesh);
-        icl_mt.moveVerticesOfObject("chair1_seat_chair1_seat", t);
+        //icl_mt.moveVerticesOfObject("chair1_seat_chair1_seat", t);
     }
 
     //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
     icl_renderer.renderInteractive();
-    //icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj0_loop/seg");
+    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop/seg");
 
     /*
     if(argc != 3){

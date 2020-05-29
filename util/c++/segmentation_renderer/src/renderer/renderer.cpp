@@ -2,9 +2,11 @@
 #include "model.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow *window);
+void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+bool takeScreenshot = false;
 
 // camera
 Camera camera(glm::vec3(0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f
@@ -68,6 +70,7 @@ int Renderer::init() {
     glfwSetFramebufferSizeCallback(m_window, framebuffer_size_callback);
     glfwSetCursorPosCallback(m_window, mouse_callback);
     glfwSetScrollCallback(m_window, scroll_callback);
+    glfwSetKeyCallback(m_window, key_callback);
     // tell GLFW to capture our mouse
     glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -102,22 +105,21 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
 void Renderer::readRGB(cv::Mat& image) {
     glBindFramebuffer(GL_FRAMEBUFFER, 4);
     image = cv::Mat(m_buffer_height, m_buffer_width, CV_8UC3);
-    std::vector<float> data_buff(m_buffer_width * m_buffer_height * 3);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, m_buffer_width, m_buffer_height, GL_RGB, GL_FLOAT, data_buff.data());
-    for (int i = 0; i < m_buffer_height; ++i) {
-        for (int j = 0; j < m_buffer_width; ++j) {
-            for (int c = 0; c < 3; c++) {
-                image.at<cv::Vec3b>(m_buffer_height - i - 1, j)[2 - c] = 
-                    static_cast<int>(256 * data_buff[int(3 * i * m_buffer_width + 3 * j + c)]);
-            }
-        }
-    }
-    // cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
+    
+    //use fast 4-byte alignment (default anyway) if possible
+    glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
+
+    //set length of one complete row in destination data (doesn't need to equal img.cols)
+    glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
+
+    glReadPixels(0, 0, image.cols, image.rows, GL_BGR, GL_UNSIGNED_BYTE, image.data);
+    cv::flip(image, image, 0);
+    // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
 }
 
 void Renderer::renderInteractive(){
     // render loop
+    int imgCounter = 0;
     while (!glfwWindowShouldClose(m_window))
     {
 
@@ -129,17 +131,13 @@ void Renderer::renderInteractive(){
 
         // input
         // -----
-        processInput(m_window);
+        processInput(m_window, *this, &imgCounter);
         
         // model/view/projection transformations
         // ------
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)m_buffer_width / (float)m_buffer_height, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
-
-        //model = glm::scale(model, glm::vec3(1, 1, -1));
-        //model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-        //model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0, 0.0, 0.0));
 
         //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
         //model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
@@ -157,7 +155,7 @@ void Renderer::renderInteractive(){
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
+void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -170,6 +168,31 @@ void processInput(GLFWwindow *window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    if (takeScreenshot){
+        cv::Mat colorImage;
+        renderer.readRGB(colorImage);
+
+        // save matrix as file
+        if (!colorImage.empty()) {
+            std::stringstream filename;
+            char scene_name[30];
+            sprintf(scene_name, "screenshot_%04d.jpg", (*imgCounter)++);
+            filename << scene_name;
+            cv::imwrite(filename.str(), colorImage);
+
+            std::cout << "Wrote screenshot: " << scene_name << std::endl;
+        }
+
+        takeScreenshot = false;
+    }
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS){
+        takeScreenshot = true;
+    }
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes

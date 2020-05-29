@@ -26,6 +26,8 @@ public:
     void renderInteractive();
     int init();
 
+    void readRGB(cv::Mat& image);
+
     Model* m_model = nullptr;
 protected:
 
@@ -37,5 +39,4 @@ protected:
     Shader* m_shader = nullptr;
 
     void render(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection);
-    void readRGB(cv::Mat& image);
 };
