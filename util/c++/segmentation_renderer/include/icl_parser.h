@@ -191,7 +191,9 @@ public:
         K[1][2] = cy;
         K[2][2] = 1;
 
-        return glm::transpose(K); // fkin column-mayor shit
+        //return glm::transpose(K); // fkin column-mayor shit
+
+        return K;
     }
 
     // Get the number of relevant files

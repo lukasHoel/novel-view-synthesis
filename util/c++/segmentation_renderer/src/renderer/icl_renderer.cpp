@@ -10,7 +10,6 @@ ICL_Renderer::~ICL_Renderer() = default;
 void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path){
     
     for(int i=0; i<ip.getNumberofPoseFiles(); i++){
-        //glm::mat4 extr = ip.getExtrinsics(i);
         glm::mat4 extr = ip.getExtrinsics(i);
         glm::mat3 intr = ip.getIntrinsics();
 
@@ -27,18 +26,62 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         std::cout << glm::to_string(extr) << std::endl;
 
         glm::mat4 trans = glm::mat4(1.0f);
-        //trans = glm::translate(trans, glm::vec3(0.3f, 0.3f, 0.3f));
-        //trans = glm::translate(trans, glm::vec3(-0.108f, -1.3f, -2.814f));
+
+
+
+        // Swap y and z via this matrix
+        // glm::mat4 swap = glm::mat4(1.0f);
+        // swap[1][1] = 0.0f;
+        // swap[2][2] = 0.0f;
+        // swap[1][2] = 1.0f;
+        // swap[2][1] = 1.0f;
+
+
+
+        // trans = glm::rotate(trans, glm::radians(-90.0f), glm::vec3(1.0, 0.0, 0.0));
+
+        // Rot X with all scale combinations
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(1.0, 0.0, 0.0));
+        // trans = glm::scale(trans, glm::vec3(1, 1, -1));
+
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(1.0, 0.0, 0.0));
+        // trans = glm::scale(trans, glm::vec3(1, -1, 1));
+
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(1.0, 0.0, 0.0));
+        // trans = glm::scale(trans, glm::vec3(-1, 1, 1));
+
+        // // Rot Y with all scale combinations
+        ////////////// CURRENT PREFERRED??? ////////////////////////
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
+        // trans = glm::scale(trans, glm::vec3(1, 1, -1));
+
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
+        // trans = glm::scale(trans, glm::vec3(1, -1, 1));
+
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
+        // trans = glm::scale(trans, glm::vec3(-1, 1, 1));
+
+        // // Rot Z with all scale combinations
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        // trans = glm::scale(trans, glm::vec3(1, 1, -1));
+
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        // trans = glm::scale(trans, glm::vec3(1, -1, 1));
+
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        // trans = glm::scale(trans, glm::vec3(-1, 1, 1));
+
+
+
+
+
+        // trans = glm::scale(trans, glm::vec3(1, -1, 1));
+        
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        //trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0));
+        // trans = glm::rotate(trans, glm::radians(i + 0.0f), glm::vec3(1.0, 0.0, 0.0));
         
 
-        // THIS ONE FROM PAPER
-        //trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-
-        //trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0));
-        //trans = glm::scale(trans, glm::vec3(1, 1, -1));
-        //trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0));
-        //trans = glm::rotate(trans, glm::radians(-90.0f), glm::vec3(1.0, 0.0, 0.0));
-        //trans = glm::scale(trans, glm::vec3(1, 1, -1));
         //trans = glm::inverse(trans);     
 
         render(trans, extr, projection);
