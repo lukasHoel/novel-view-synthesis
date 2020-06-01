@@ -61,6 +61,7 @@ class ICLNUIMDataset(Dataset):
                  inverse_depth=False,
                  cacheItems=False,
                  transform=None,
+                 in_shape=(480,640),
                  out_shape=(480,640)):
         '''
 
@@ -79,6 +80,7 @@ class ICLNUIMDataset(Dataset):
             self.Resize = True
         else:
             self.Resize = False
+        self.in_shape = in_shape
         self.out_shape = out_shape
         # Fix for this issue: https://github.com/pytorch/vision/issues/2194
         if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
@@ -264,7 +266,7 @@ class ICLNUIMDataset(Dataset):
 
         image = self.load_image(idx)
         #start = time()
-        depth = self.load_depth(idx)
+        depth = self.load_depth(idx, self.in_shape)
         #print("Depth loading took {}".format(time() - start))
 
 
@@ -284,7 +286,7 @@ class ICLNUIMDataset(Dataset):
 
             # load image of new index
             output_image = self.load_image(output_idx)
-            output_depth = self.load_depth(output_idx)
+            output_depth = self.load_depth(output_idx, self.in_shape)
 
             # load cam of new index
             RT2, RT2inv, K2, K2inv = self.load_cam(output_idx)
