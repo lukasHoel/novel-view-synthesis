@@ -1,6 +1,5 @@
 """
 Performs training, validation, testing for nvs_model.py and calculates loss and saves it to tensorboard.
-
 Author: Lukas Hoellein
 """
 
@@ -64,7 +63,7 @@ def check_norm(img, verbose=False):
 
 # NOTE: Unused, might be used for debugging
 def change_norm(img, in_range=None, out_range=[0,1]):
-    """Based on the norm scheme of img and output the same image in the new norm scheme""" 
+    """Based on the norm scheme of img and output the same image in the new norm scheme"""
     if not in_range:
         in_range = check_norm(img)
 
@@ -85,7 +84,6 @@ class NVS_Solver(object):
                  tensorboard_writer=None,
                  log_dir=None):
         """
-
         Parameters
         ----------
         optim: which optimizer to use, e.g. Adam
@@ -176,10 +174,9 @@ class NVS_Solver(object):
 
         self.writer.flush()
 
-    def visualize_output(self, output, take_slice=None, tag="image", step=0):
+    def visualize_output(self, output, take_slice=None, tag="image", step=0, depth=False):
         """
         Generic method for visualizing a single image or a whole batch
-
         Parameters
         ----------
         output: batch of data, containing input, target, prediction and depth image
@@ -188,10 +185,11 @@ class NVS_Solver(object):
         step: used for stamping epoch or iteration
         """
         # TODO: depth_batch is ignored for the moment, however, if needed, it can also be integrated later on
-        input_batch, target_batch, pred_batch, depth_batch = output["InputImg"].cpu(),\
-                                                             output["OutputImg"].cpu(),\
-                                                             output["PredImg"].cpu(),\
-                                                             output["PredDepth"].cpu()
+        input_batch, target_batch, pred_batch, depth_batch, input_depth = output["InputImg"].cpu(),\
+                                                                          output["OutputImg"].cpu(),\
+                                                                          output["PredImg"].cpu(),\
+                                                                          output["PredDepth"].cpu(),\
+                                                                          output['InputDepth'].cpu()
         with torch.no_grad():
             # In case of a single image add one dimension to the beginning to create single image batch
             if len(pred_batch.shape) == 3:
@@ -199,7 +197,7 @@ class NVS_Solver(object):
                 target_batch = target_batch.unsqueeze(0)
                 pred_batch = pred_batch.unsqueeze(0)
                 depth_batch = depth_batch.unsqueeze(0)
-            
+
             if len(pred_batch.shape) != 4:
                 print("Only 3D or 4D tensors can be visualized")
                 return
@@ -210,7 +208,7 @@ class NVS_Solver(object):
                 target_batch = target_batch[take_slice[0], take_slice[1]]
                 pred_batch = pred_batch[take_slice[0], take_slice[1]]
                 depth_batch = depth_batch[take_slice[0], take_slice[1]]
-                
+
             # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
             img_lst = torch.Tensor()
 
@@ -218,15 +216,29 @@ class NVS_Solver(object):
             for i in range(pred_batch.shape[0]):
                 # Each iteration pick input image and corresponding target & pred images
                 # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
-                # Order in img_list defines the layout. 
+                # Order in img_list defines the layout.
                 # Current layout: input - target - pred at each row
-                img_lst = torch.cat((img_lst, 
-                    input_batch[i].unsqueeze(0), 
-                    target_batch[i].unsqueeze(0), 
-                    pred_batch[i].unsqueeze(0),
-                    depth_batch[i].unsqueeze(0)), dim=0)
-            
-            img_grid = make_grid(img_lst, nrow=4) # Per row, pick three images from the stack 
+                img_lst = torch.cat((img_lst,
+                    input_batch[i].unsqueeze(0),
+                    target_batch[i].unsqueeze(0),
+                    pred_batch[i].unsqueeze(0)), dim=0)
+
+            if depth:
+                depth_lst = torch.Tensor()
+                depth_batch = (depth_batch-0)/(10-0)
+                input_depth = (input_depth-0)/(10-0)
+                for i in range(depth_batch.shape[0]):
+                    # Each iteration pick input image and corresponding target & pred images
+                    # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
+                    # Order in img_list defines the layout.
+                    # Current layout: input - target - pred at each row
+                    depth_lst = torch.cat((depth_lst,
+                        input_depth[i].unsqueeze(0),
+                        depth_batch[i].unsqueeze(0)), dim=0)
+                depth_grid = make_grid(depth_lst, nrow=2)
+                self.writer.add_image(tag+'/depth', depth_grid, global_step=step)
+
+            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack
             # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
@@ -291,7 +303,6 @@ class NVS_Solver(object):
               verbose=False):
         """
         Train a given model with the provided data.
-
         Inputs:
         :param model: nvs_model object initialized from nvs_model.py
         :param train_loader: train data in torch.utils.data.DataLoader

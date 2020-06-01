@@ -28,6 +28,7 @@ class GAN_Wrapper_Solver(object):
                  g_loss_func=None, # if left None, the NVS_Solver will instantiate a standard SynthesisLoss class
                  extra_args={},
                  log_dir=None,
+                 log_depth=False,
                  init_discriminator_weights=True):
         """
 
@@ -45,6 +46,7 @@ class GAN_Wrapper_Solver(object):
         optim_d_args_merged.update(optim_d_args)
         self.optim_d_args = optim_d_args_merged
         self.optim_d = optim_d
+        self.log_depth = log_depth
 
         self.writer = SummaryWriter(log_dir)
 
@@ -82,6 +84,53 @@ class GAN_Wrapper_Solver(object):
         self.train_acc_history = []
         self.val_acc_history = []
         self.val_loss_history = []
+
+
+    def log_iteration_loss_and_acc(self, loss_dir, acc_dir, prefix, idx): # acc_dir argument needed
+        # WRITE LOSSES
+        for loss in loss_dir.keys():
+            self.writer.add_scalar(prefix + 'Batch/Loss/' + loss,
+                                   loss_dir[loss].detach().cpu().numpy(),
+                                   idx)
+        if 'D_Fake' and 'GAN' in loss_dir.keys():
+            self.writer.add_scalars(prefix + 'Batch/CombinedLoss/',
+                                    {'GAN': loss_dir['GAN'].detach().cpu().numpy(),
+                                      'D_Fake': loss_dir['D_Fake'].detach().cpu().numpy()},
+                                    idx)
+        self.writer.flush()
+
+        # WRITE ACCS
+        for acc in acc_dir.keys():
+            self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
+                                   acc_dir[acc].detach().data.cpu().numpy(),
+                                   idx)
+        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["ssim"].detach().cpu().numpy() # could also use acc_dir["psnr"]
+
+
+    def log_epoch_loss_and_acc(self, train_loss, val_loss, train_acc, val_acc, idx):
+        self.train_loss_history.append(train_loss)
+        self.train_acc_history.append(train_acc)
+        self.writer.add_scalar('Epoch/Loss/Train', train_loss, idx)
+        self.writer.add_scalar('Epoch/Accuracy/Train', train_acc, idx)
+
+        if val_loss is not None:
+            self.val_loss_history.append(val_loss)
+            self.writer.add_scalar('Epoch/Loss/Val', val_loss, idx)
+            self.writer.add_scalars('Epoch/Loss',
+                                    {'train': train_loss,
+                                     'val': val_loss},
+                                    idx)
+
+        if val_acc is not None:
+            self.val_acc_history.append(val_acc)
+            self.writer.add_scalar('Epoch/Accuracy/Val', val_acc, idx)
+            self.writer.add_scalars('Epoch/Accuracy',
+                                    {'train': train_acc,
+                                     'val': val_acc},
+                                    idx)
+
+        self.writer.flush()
+
 
     def train(self,
               model,
@@ -168,7 +217,7 @@ class GAN_Wrapper_Solver(object):
                 nvs_losses.update(d_losses)
 
                 # LOGGING of loss
-                train_loss, train_acc = self.nvs_solver.log_iteration_loss_and_acc(nvs_losses, nvs_accs, 'Train/', epoch * iter_per_epoch + i)
+                train_loss, train_acc = self.log_iteration_loss_and_acc(nvs_losses, nvs_accs, 'Train/', epoch * iter_per_epoch + i)
                 train_losses.append(train_loss) # TODO is this correct? see above: why not combine everything into Total Loss?
                 train_accs.append(train_acc)
 
@@ -177,7 +226,7 @@ class GAN_Wrapper_Solver(object):
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
-                    self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i)
+                    self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i, depth=self.log_depth)
 
             # ONE EPOCH PASSED --> calculate + log mean train accuracy/loss for this epoch
             mean_train_loss = np.mean(train_losses)
@@ -188,7 +237,7 @@ class GAN_Wrapper_Solver(object):
                                                                                      max=num_epochs,
                                                                                      acc=mean_train_acc,
                                                                                      loss=mean_train_loss))
-                self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i)
+                self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i, depth=self.log_depth)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
             mean_val_loss = None
@@ -204,7 +253,7 @@ class GAN_Wrapper_Solver(object):
                     for i, sample in enumerate(val_minibatches):
 
                         nvs_losses, output, nvs_accs = self.nvs_solver.forward_pass(model, sample)
-                        val_loss, val_acc = self.nvs_solver.log_iteration_loss_and_acc(nvs_losses, nvs_accs, 'Val/', epoch * len(val_minibatches) + i)
+                        val_loss, val_acc = self.log_iteration_loss_and_acc(nvs_losses, nvs_accs, 'Val/', epoch * len(val_minibatches) + i)
                         val_losses.append(val_loss)
                         val_accs.append(val_acc)
 
@@ -213,7 +262,7 @@ class GAN_Wrapper_Solver(object):
                             print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                     max=len(val_loader),
                                                                                     loss=val_loss))
-                            self.nvs_solver.visualize_output(output, tag="val", step=epoch*len(val_minibatches) + i)
+                            self.nvs_solver.visualize_output(output, tag="val", step=epoch*len(val_minibatches) + i, depth=self.log_depth)
 
                     mean_val_loss = np.mean(val_losses)
                     mean_val_acc = np.mean(val_accs)
@@ -223,10 +272,10 @@ class GAN_Wrapper_Solver(object):
                                                                                            max=num_epochs,
                                                                                            acc=mean_val_acc,
                                                                                            loss=mean_val_loss))
-                        self.nvs_solver.visualize_output(output, tag="val", step=epoch*len(val_minibatches) + i)
+                        self.nvs_solver.visualize_output(output, tag="val", step=epoch*len(val_minibatches) + i, depth=self.log_depth)
 
             # LOG EPOCH LOSS / ACC FOR TRAIN AND VAL IN TENSORBOARD
-            self.nvs_solver.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
+            self.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,

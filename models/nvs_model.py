@@ -84,7 +84,7 @@ class NovelViewSynthesisModel(nn.Module):
 
         # POINT CLOUD TRANSFORMER
         # REGRESS 3D POINTS
-        self.pts_regressor = Unet(num_filters=32, channels_in=3, channels_out=1, img_shape=imageSize)
+        self.pts_regressor = Unet(num_filters=32, channels_in=3, channels_out=1)
 
         # TODO is this the class that takes care of ambiguous depth after reprojection?
         '''
@@ -215,6 +215,7 @@ class NovelViewSynthesisModel(nn.Module):
             "OutputImg": gt_img,
             "PredImg": transformed_img,
             "PredDepth": regressed_pts,
+            "InputDepth": depth_img
         }
 
     # TODO WHERE IS THIS USED? At inference time for multiple image generations?
