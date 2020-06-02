@@ -24,7 +24,13 @@ def get_splatter(
         raise NotImplementedError()
 
 class PtsManipulator(nn.Module):
+
+    matterport_mode = 'mp3d'
+    icl_nuim_mode = 'icl'
+    modes = [matterport_mode, icl_nuim_mode]
+
     def __init__(self,
+                 mode='mp3d',
                  W=640,
                  H=480,
                  C=3,
@@ -36,6 +42,10 @@ class PtsManipulator(nn.Module):
                  accumulation='alphacomposite'
                  ):
         super().__init__()
+
+        self.mode = mode
+        if mode not in PtsManipulator.modes:
+            raise ValueError("Unsupported mode: " + mode)
 
         self.splatter = get_splatter(
             name="xyblending",
@@ -49,24 +59,36 @@ class PtsManipulator(nn.Module):
             accumulation_tau=accumulation_tau
         )
 
-        self.img_shape = (H, W)
+        if mode == PtsManipulator.icl_nuim_mode:
+            self.img_shape = (H, W)
 
-        # create coordinate system for x and y
-        xs = torch.linspace(0, W - 1, W)
-        ys = torch.linspace(0, H - 1, H)
+            # create coordinate system for x and y
+            xs = torch.linspace(0, W - 1, W)
+            ys = torch.linspace(0, H - 1, H)
 
-        xs = xs.view(1, 1, 1, W).repeat(1, 1, H, 1)
-        ys = ys.view(1, 1, H, 1).repeat(1, 1, 1, W)
+            xs = xs.view(1, 1, 1, W).repeat(1, 1, H, 1)
+            ys = ys.view(1, 1, H, 1).repeat(1, 1, 1, W)
 
-        # build homogeneous coordinate system with [X, Y, 1, 1] to prepare for depth
-        xyzs = torch.cat(
-            (xs, ys, torch.ones(xs.size()), torch.ones(xs.size())), 1
-        ).view(1, 4, -1)
+            # build homogeneous coordinate system with [X, Y, 1, 1] to prepare for depth
+            xyzs = torch.cat(
+                (xs, ys, torch.ones(xs.size()), torch.ones(xs.size())), 1
+            ).view(1, 4, -1)
+
+        elif mode == PtsManipulator.matterport_mode:
+            xs = torch.linspace(0, W - 1, W) / float(W - 1) * 2 - 1
+            ys = torch.linspace(0, W - 1, W) / float(W - 1) * 2 - 1
+
+            xs = xs.view(1, 1, 1, W).repeat(1, 1, W, 1)
+            ys = ys.view(1, 1, W, 1).repeat(1, 1, 1, W)
+
+            xyzs = torch.cat(
+                (xs, -ys, -torch.ones(xs.size()), torch.ones(xs.size())), 1
+            ).view(1, 4, -1)
 
         self.register_buffer("xyzs", xyzs)
 
     def project_pts(
-            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, colors=None
+            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
     ):
         # add Zs to the coordinate system
         # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image
@@ -90,18 +112,24 @@ class PtsManipulator(nn.Module):
         zs = xy_proj[:, 2:3, :]
         zs[mask] = EPS
 
-        # here we concatenate (x,y) / -z and the original z-coordinate into a new (x,y,z) vector
-        sampler = torch.cat((xy_proj[:, 0:2, :] / zs, xy_proj[:, 2:3, :]), 1)
+        if self.mode == PtsManipulator.icl_nuim_mode:
+            # here we concatenate (x,y) / -z and the original z-coordinate into a new (x,y,z) vector
+            sampler = torch.cat((xy_proj[:, 0:2, :] / zs, xy_proj[:, 2:3, :]), 1)
 
-        # rescale coordinates to work with splatting and move to origin
-        sampler[:, 0, :] = sampler[:, 0, :] / float(self.img_shape[1] - 1) * 2 - 1
-        sampler[:, 1, :] = sampler[:, 1, :] / float(self.img_shape[0] - 1) * 2 - 1
+            # rescale coordinates to work with splatting and move to origin
+            sampler[:, 0, :] = sampler[:, 0, :] / float(self.img_shape[1] - 1) * 2 - 1
+            sampler[:, 1, :] = sampler[:, 1, :] / float(self.img_shape[0] - 1) * 2 - 1
 
-        # here we set (x,y,z) to -10 where we have invalid zs that cause nans
-        sampler[mask.repeat(1, 3, 1)] = -10
+            # here we set (x,y,z) to -10 where we have invalid zs that cause nans
+            sampler[mask.repeat(1, 3, 1)] = 10
 
-        # Don't flip the ys
-        # sampler = sampler * torch.Tensor([1, 1, 1]).unsqueeze(0).unsqueeze(2).to(sampler.device)
+        elif self.mode == PtsManipulator.matterport_mode:
+            sampler = torch.cat((xy_proj[:, 0:2, :] / -zs, xy_proj[:, 2:3, :]), 1)
+            sampler[mask.repeat(1, 3, 1)] = -10
+            # Flip the ys
+            sampler = sampler * torch.Tensor([1, -1, -1]).unsqueeze(0).unsqueeze(
+                2
+            ).to(sampler.device)
 
         return sampler
 
