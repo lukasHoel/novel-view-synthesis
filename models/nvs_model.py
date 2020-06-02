@@ -28,6 +28,7 @@ class NovelViewSynthesisModel(nn.Module):
                  dec_spectral_norm=True,
 
                  # project
+                 projection_mode=PtsManipulator.matterport_mode,
                  points_per_pixel=8,
                  learn_feature=True,
                  radius=1.5,

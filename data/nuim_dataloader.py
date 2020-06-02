@@ -127,8 +127,11 @@ def getEulerAngles(R):
 
 
 def test():
+
+    size = 256
+
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((256, 256)),
+        torchvision.transforms.Resize((size, size)),
         torchvision.transforms.ToTensor(),
     ])
 
@@ -136,7 +139,8 @@ def test():
                              sampleOutput=True,
                              inverse_depth=False,
                              cacheItems=False,
-                             transform=transform)
+                             transform=transform,
+                             out_shape=(size, size))
     #dataset = ICLNUIMDataset("sample", sampleOutput=True, transform=transform);
 
     print("Length of dataset: {}".format(len(dataset)))
