@@ -44,8 +44,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
-        :param sampleOutput: whether or not to uniformly sample a second image + extrinsic camera pose (R|T) in the neighborhood of each accessed item.
-                neighborhood is currently defined as: select uniformly at random any camera in the range [index-30, index+30) where index is the accessed item index.
+        :param sampleOutput: whether or not to sample the second image from disk. If idx points to "_0" image, the "_1" image is returned, otherwise it is the other way round.
                 For example: If the 500. item is accessed, the second camera pose (R|T) will be from any of the poses of the items 470-530 (excluding 500).
         :param inverse_depth: If true, depth.pow(-1) is returned for the depth file (changing depth BEFORE applying transform object).
         :param transform: transform that should be applied to the input image AND the target depth
@@ -65,6 +64,16 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
 
     def load_int_cam(self):
         return MP3D_Habitat_Offline_Dataset.K, MP3D_Habitat_Offline_Dataset.Kinv
+
+    def create_input_to_output_sample_map(self):
+        inputToOutputIndex = []
+        for idx in range(self.size):
+            if self.img[idx][:-4].endswith('0'):
+                inputToOutputIndex.append(idx+1)
+            else:
+                inputToOutputIndex.append(idx-1)
+
+        return inputToOutputIndex
 
 
 def getEulerAngles(R):
@@ -91,7 +100,7 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    i = 0
+    i = 2
     item = dataset.__getitem__(i)
 
     #print(item["depth"].numpy().flags)

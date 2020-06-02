@@ -46,9 +46,7 @@ class DiskDataset(Dataset, ABC):
         :param path: path/to/<base>/files. Needs to be a directory with .png, .depth and .txt files
         :param maxDepth: maximum depth that is accepted. Everything above that will be cut to given value.
         :param imageInputShape: the original image input shape for the dataset that gets used. Necessary to reshape depth values into correct array dimensions.
-        :param sampleOutput: whether or not to uniformly sample a second image + extrinsic camera pose (R|T) in the neighborhood of each accessed item.
-                neighborhood is currently defined as: select uniformly at random any camera in the range [index-30, index+30) where index is the accessed item index.
-                For example: If the 500. item is accessed, the second camera pose (R|T) will be from any of the poses of the items 470-530 (excluding 500).
+        :param sampleOutput: whether or not to sample an output image. Implementations specify how the output is retrieved.
         :param inverse_depth: If true, depth.pow(-1) is returned for the depth file (changing depth BEFORE applying transform object).
         :param cacheItems: If true, all items will be stored in RAM dictionary, once they were accessed.
         :param transform: transform that should be applied to the input image AND the target depth
@@ -82,18 +80,7 @@ class DiskDataset(Dataset, ABC):
 
         self.sampleOutput = sampleOutput
         if self.sampleOutput:
-            self.inputToOutputIndex = []
-            for idx in range(self.size):
-                # sample second idx in [idx-30, idx+30) interval
-                low = idx - 30 if idx >= 30 else 0
-                high = idx + 30 if idx <= self.size - 30 else self.size
-                output_idx = np.random.randint(low, high, 1)[0] # high is exclusive
-
-                # never return the same idx, default handling: just use +1 or -1 idx
-                if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
-                    output_idx = idx+1 if idx < self.size-1 else idx-1
-
-                self.inputToOutputIndex.append(output_idx)
+            self.inputToOutputIndex = self.create_input_to_output_sample_map()
 
         self.cacheItems = cacheItems
         self.itemCache = [None for i in range(self.size)]
@@ -156,6 +143,10 @@ class DiskDataset(Dataset, ABC):
 
     @abstractmethod
     def modify_depth(self, depth):
+        pass
+
+    @abstractmethod
+    def create_input_to_output_sample_map(self):
         pass
 
     def __getitem__(self, idx):

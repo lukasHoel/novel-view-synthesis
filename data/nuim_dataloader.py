@@ -67,6 +67,22 @@ class ICLNUIMDataset(DiskDataset):
                              cacheItems=cacheItems,
                              transform=transform)
 
+    def create_input_to_output_sample_map(self):
+        inputToOutputIndex = []
+        for idx in range(self.size):
+            # sample second idx in [idx-30, idx+30) interval
+            low = idx - 30 if idx >= 30 else 0
+            high = idx + 30 if idx <= self.size - 30 else self.size
+            output_idx = np.random.randint(low, high, 1)[0]  # high is exclusive
+
+            # never return the same idx, default handling: just use +1 or -1 idx
+            if output_idx == idx and self.size > 1:  # if we only have one sample, we can do nothing about this.
+                output_idx = idx + 1 if idx < self.size - 1 else idx - 1
+
+            inputToOutputIndex.append(output_idx)
+
+        return inputToOutputIndex
+
     def modify_depth(self, depth):
         return np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
