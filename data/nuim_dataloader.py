@@ -54,34 +54,26 @@ class ICLNUIMDataset(Dataset):
 
     def __init__(self,
                  path,
-                 depth_to_image_plane=True,
-                 use_real_intrinsics=False,
                  sampleOutput=True,
-                 RTrelativeToOutput=False,
                  inverse_depth=False,
                  cacheItems=False,
                  transform=None,
-                 in_shape=(480,640),
                  out_shape=(480,640)):
         '''
 
         :param path: path/to/NUIM/files. Needs to be a directory with .png, .depth and .txt files, as can be obtained from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html
-        :param depth_to_image_plane: whether or not to convert to depth in the .depth file into image_plane depth, see: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
         :param sampleOutput: whether or not to uniformly sample a second image + extrinsic camera pose (R|T) in the neighborhood of each accessed item.
                 neighborhood is currently defined as: select uniformly at random any camera in the range [index-30, index+30) where index is the accessed item index.
                 For example: If the 500. item is accessed, the second camera pose (R|T) will be from any of the poses of the items 470-530 (excluding 500).
-        :param RTrelativeToOutput: when sampleOutput=true, then this option will calculate relativ RT between cam1 and cam2 and return that as RT2. RT1 will be the identity.
         :param inverse_depth: If true, depth.pow(-1) is returned for the depth file (changing depth BEFORE applying transform object).
         :param transform: transform that should be applied to the input image AND the target depth
-        :param use_real_intrinsics: If true, return the K and Kinv matrix from ICL dataset. If false return identity matrix.
+        :param out_shape: the output shape of images. If you apply transform that changes the output shape, we need to reflect this in a modified K matrix. Thus,
+                if a "Resize" can be found in transform, then K will be recalculated w.r.t. the out_shape provided here. TODO: handle more than just "Resize".
         '''
         self.transform = transform
-        if 'Resize' in str(transform):
-            self.Resize = True
-        else:
-            self.Resize = False
-        self.in_shape = in_shape
         self.out_shape = out_shape
+        self.K, self.Kinv = self.load_int_cam()
+
         # Fix for this issue: https://github.com/pytorch/vision/issues/2194
         if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
             self.transform_depth = torchvision.transforms.Compose([
@@ -93,8 +85,6 @@ class ICLNUIMDataset(Dataset):
         else:
             self.transform_depth = self.transform
 
-        self.depth_to_image_plane = depth_to_image_plane
-        self.use_real_intrinsics = use_real_intrinsics
         self.inverse_depth = inverse_depth
         self.path = path
 
@@ -119,18 +109,13 @@ class ICLNUIMDataset(Dataset):
                 if output_idx == idx and self.size > 1: # if we only have one sample, we can do nothing about this.
                     output_idx = idx+1 if idx < self.size-1 else idx-1
 
-                output_idx = idx+1 if idx < self.size-1 else idx
-
                 self.inputToOutputIndex.append(output_idx)
-
-        self.RTrelativeToOutput = RTrelativeToOutput
 
         self.cacheItems = cacheItems
         self.itemCache = [None for i in range(self.size)]
 
     def load_image(self, idx):
         return Image.open(os.path.join(self.path, self.img[idx]))
-        #return io.imread(os.path.join(self.path, self.img[idx]))
 
     def load_depth(self, idx, img_shape=(480, 640)):
         if self.has_binary_depth:
@@ -142,9 +127,8 @@ class ICLNUIMDataset(Dataset):
                 depth = np.asarray(depth, dtype=np.float32).reshape(img_shape)  # convert to same format as image WxH
 
         # convert to image plane depth by taking into account the position in the WxH array as (x, y)
-        if self.depth_to_image_plane:
-            # use (y,x) as input to lambda because the depth.shape is also in (y,x) format.
-            depth = np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
+        # use (y,x) as input to lambda because the depth.shape is also in (y,x) format.
+        depth = np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
         # invert depth
         if self.inverse_depth:
@@ -152,7 +136,7 @@ class ICLNUIMDataset(Dataset):
 
         return Image.fromarray(depth, mode='F') # return as float PIL Image
 
-    def load_cam(self, idx):
+    def load_ext_cam(self, idx):
         cam = {} # load the .txt file in this dict
         with open(os.path.join(self.path, self.cam[idx])) as f:
             for line in f:
@@ -169,14 +153,22 @@ class ICLNUIMDataset(Dataset):
         x = x / np.linalg.norm(x)
         y = np.cross(z, x)
 
+        # combine in correct shape
         RT = np.column_stack((x, y, z, cam["cam_pos"]))
-        RT = np.vstack([RT, [0,0,0,1]]) # if (0 0 0 1) row is needed
+        RT = np.vstack([RT, [0,0,0,1]])
         RT = RT.astype(np.float32)
-        RTinv = np.linalg.inv(RT).astype(np.float32)
-        #RTinv = np.vstack([RTinv, [0, 0, 0, 1]])  # if (0 0 0 1) row is needed
 
-        # Code to calculate K - unnecessary because K is constant. taken from: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/getcamK.m
-        if self.Resize:
+        # calculate RTinv from RT
+        RTinv = np.linalg.inv(RT).astype(np.float32)
+
+        # return as torch tensor
+        RT = torch.from_numpy(RT)
+        RTinv = torch.from_numpy(RTinv)
+
+        return RT, RTinv
+
+    def load_int_cam(self):
+        if self.transform is not None and 'Resize' in str(self.transform):
             K2 = torch.from_numpy(np.zeros((4,4)).astype(np.float32))
             K2[0,0] = 0.751875 * self.out_shape[1]      #cam_K2['fx']
             K2[1,1] = -1.0 * self.out_shape[0]          #cam_K2['fy']
@@ -189,38 +181,9 @@ class ICLNUIMDataset(Dataset):
             K2inv[:3,:3] = invert_K(K2[:3,:3])
             K2inv[3,3] = 1
 
-            return RT, RTinv, K2, K2inv
-        '''
-        focal = np.linalg.norm(cam["cam_dir"])
-        aspect = np.linalg.norm(cam["cam_right"]) / np.linalg.norm(cam["cam_up"])
-        angle = 2 * np.arctan((np.linalg.norm(cam["cam_right"]) / 2) / np.linalg.norm(cam["cam_dir"]))
-
-        M = 480
-        N = 640
-
-        width = N
-        height = M
-
-        psx = 2 * focal * np.tan(0.5 * angle) / N
-        psy = 2 * focal * np.tan(0.5 * angle) / aspect / M
-
-        psx = psx / focal
-        psy = psy / focal
-
-        Ox = (width + 1) * 0.5
-        Oy = (height + 1) * 0.5
-
-        K = np.zeros((3, 3))
-        K[0, 0] = 1 / psx
-        K[0, 2] = Ox
-        K[1, 1] = - (1 / psy)
-        K[1, 2] = Oy
-        K[2, 2] = 1
-
-        print(K)
-        '''
-
-        return RT, RTinv, ICLNUIMDataset.K, ICLNUIMDataset.Kinv
+            return K2, K2inv
+        else:
+            return ICLNUIMDataset.K, ICLNUIMDataset.Kinv
 
     def __getitem__(self, idx):
         """
@@ -267,18 +230,14 @@ class ICLNUIMDataset(Dataset):
             return self.itemCache[idx]
 
         image = self.load_image(idx)
-        #start = time()
-        depth = self.load_depth(idx, self.in_shape)
-        #print("Depth loading took {}".format(time() - start))
-
-
-        RT1, RT1inv, K, Kinv = self.load_cam(idx)
+        depth = self.load_depth(idx)
+        RT1, RT1inv = self.load_ext_cam(idx)
 
         cam = {
-            'RT1': torch.from_numpy(RT1),
-            'RT1inv': torch.from_numpy(RT1inv),
-            'K': K if self.use_real_intrinsics else torch.eye(4),
-            'Kinv': Kinv if self.use_real_intrinsics else torch.eye(4)
+            'RT1': RT1,
+            'RT1inv': RT1inv,
+            'K': self.K,
+            'Kinv': self.Kinv
         }
 
         output = None
@@ -288,50 +247,19 @@ class ICLNUIMDataset(Dataset):
 
             # load image of new index
             output_image = self.load_image(output_idx)
-            output_depth = self.load_depth(output_idx, self.in_shape)
+            output_depth = self.load_depth(output_idx)
 
             # load cam of new index
-            RT2, RT2inv, K2, K2inv = self.load_cam(output_idx)
+            RT2, RT2inv = self.load_ext_cam(output_idx)
 
-            if self.RTrelativeToOutput:
-                #calculate relative RT matrix
-                R1 = RT1[:3, :3]
-                T1 = RT1[:3, 3]
-                R2 = RT2[:3, :3]
-                T2 = RT2[:3, 3]
-
-                # RT
-                #print(T1.shape)
-                #print((T1-T2).shape)
-                T = (R1.T@R2).dot(T2 - T1)
-                RT = np.eye(4)
-                RT[0:3, 0:3] = R1.T @ R2
-                RT[:3, 3] = T
-                RT = RT.astype(np.float32)
-                RT = torch.from_numpy(RT)
-
-                # RTinv
-                #RTinv = np.linalg.inv(RT).astype(np.float32)
-                RTinv = invert_RT(RT[:3,:])
-                RTinv = np.vstack([RTinv, [0, 0, 0, 1]]).astype(np.float32)  # if (0 0 0 1) row is needed
-                identity = torch.eye(4)
-                RTinv = torch.from_numpy(RTinv)
-
-                # Set dict
-                cam['RT1'] = identity
-                cam['RT1inv'] = identity
-                cam['RT2'] = RT
-                cam['RT2inv'] = RTinv
-            else:
-                cam['RT2'] = torch.from_numpy(RT2)
-                cam['RT2inv'] = torch.from_numpy(RT2inv)
+            cam['RT2'] = RT2
+            cam['RT2inv'] = RT2inv
 
             output = {
                 'image': output_image,
                 'depth': output_depth,
                 'idx': output_idx
             }
-
 
         sample = {
             'image': image,
@@ -382,14 +310,11 @@ def test():
     ])
 
     dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop",
-                             depth_to_image_plane=True,
-                             use_real_intrinsics=False,
                              sampleOutput=True,
-                             RTrelativeToOutput=False,
                              inverse_depth=False,
-                             cacheItems=True,
+                             cacheItems=False,
                              transform=transform)
-    #dataset = ICLNUIMDataset("sample", depth_to_image_plane=True, sampleOutput=True, transform=transform);
+    #dataset = ICLNUIMDataset("sample", sampleOutput=True, transform=transform);
 
     print("Length of dataset: {}".format(len(dataset)))
 
