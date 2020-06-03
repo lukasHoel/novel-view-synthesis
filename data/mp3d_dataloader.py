@@ -2,7 +2,8 @@ from util.camera_transformations import *
 import torchvision
 
 from data.disk_dataloader import DiskDataset
-
+import os
+import re
 
 class MP3D_Habitat_Offline_Dataset(DiskDataset):
     '''
@@ -59,6 +60,21 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
                              cacheItems=cacheItems,
                              transform=transform)
 
+    def parse_directories(self):
+        folder_names = os.listdir(self.path)
+        full_folder_paths = map(lambda x: os.path.join(self.path, x), folder_names)
+        files = []
+        for i, folder in enumerate(full_folder_paths):
+            for file in os.listdir(folder):
+                files.append(os.path.join(folder_names[i], file))
+        files = sorted(files)
+
+        self.img = list(filter(lambda x: x.endswith('.png'), files))
+        self.depth = list(filter(lambda x: x.endswith('.depth'), files))
+        self.depth_binary = list(filter(lambda x: x.endswith('.depth.npy'), files))
+        self.has_binary_depth = len(self.depth_binary) > 0
+        self.cam = list(filter(lambda x: x.endswith('.txt'), files))
+
     def modify_depth(self, depth):
         return depth # nothing to do here
 
@@ -66,12 +82,16 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
         return MP3D_Habitat_Offline_Dataset.K, MP3D_Habitat_Offline_Dataset.Kinv
 
     def create_input_to_output_sample_map(self):
+        regex = r"\w+_\d+_(\d+).\w+"
         inputToOutputIndex = []
+        
         for idx in range(self.size):
-            if self.img[idx][:-4].endswith('0'):
+            pair_id = int(re.search(regex, self.img[idx]).group(1))
+            if pair_id == 0:
                 inputToOutputIndex.append(idx+1)
             else:
                 inputToOutputIndex.append(idx-1)
+            # NOTE: n > 2 views, current implementation should be changed
 
         return inputToOutputIndex
 
@@ -90,7 +110,7 @@ def test():
         torchvision.transforms.ToTensor(),
     ])
 
-    dataset = MP3D_Habitat_Offline_Dataset("/home/lukas/Desktop/git/synsin/dataset",
+    dataset = MP3D_Habitat_Offline_Dataset("./data/mp3d_dataset/",
                              in_size=256,
                              sampleOutput=True,
                              inverse_depth=False,
@@ -100,7 +120,8 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    i = 2
+    import numpy as np
+    i = np.random.randint(len(dataset))
     item = dataset.__getitem__(i)
 
     #print(item["depth"].numpy().flags)
@@ -131,13 +152,13 @@ def test():
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
     out_idx = item['output']['idx']
     fig.add_subplot(1, 3, 1)
-    plt.title("Image")
+    plt.title("Input Image")
     plt.imshow(img)
     fig.add_subplot(1, 3, 2)
-    plt.title("Depth Map")
-    plt.imshow(depth, cmap='gray')
+    plt.title("Input Depth Map")
+    plt.imshow(depth)
     fig.add_subplot(1, 3, 3)
-    plt.title("Output Image " + str(out_idx))
+    plt.title("Output Image")
     plt.imshow(out_img)
 
     plt.show()

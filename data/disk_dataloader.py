@@ -70,11 +70,21 @@ class DiskDataset(Dataset, ABC):
         self.maxDepth = maxDepth
 
         self.path = path
-        self.img = sorted([f for f in os.listdir(path) if f.endswith('.png')])
-        self.depth = sorted([f for f in os.listdir(path) if f.endswith('.depth')])
-        self.depth_binary = sorted([f for f in os.listdir(path) if f.endswith('.depth.npy')])
-        self.has_binary_depth = len(self.depth_binary) > 0
-        self.cam = sorted([f for f in os.listdir(path) if f.endswith('.txt')])
+        dir_content = os.listdir(path)
+        full_paths = map(lambda x: os.path.join(self.path, x), dir_content)
+        contains_dir = any(filter(os.path.isdir, full_paths))
+
+        # MP3D: Contains folder per scene
+        if contains_dir:
+            self.parse_directories()
+
+        # ICL-NUIM: Contains files only
+        else:
+            self.img = sorted([f for f in dir_content if f.endswith('.png')])
+            self.depth = sorted([f for f in dir_content if f.endswith('.depth')])
+            self.depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy')])
+            self.has_binary_depth = len(self.depth_binary) > 0
+            self.cam = sorted([f for f in dir_content if f.endswith('.txt')])
 
         self.size = len(self.img)
 
@@ -143,6 +153,10 @@ class DiskDataset(Dataset, ABC):
 
     @abstractmethod
     def modify_depth(self, depth):
+        pass
+
+    @abstractmethod
+    def parse_directories(self):
         pass
 
     @abstractmethod

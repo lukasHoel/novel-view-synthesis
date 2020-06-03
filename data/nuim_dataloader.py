@@ -117,6 +117,9 @@ class ICLNUIMDataset(DiskDataset):
 
         return z
 
+    def parse_directories(self):
+        pass
+
 
 def getEulerAngles(R):
     ry = np.arcsin(R[0,2])
@@ -135,7 +138,7 @@ def test():
         torchvision.transforms.ToTensor(),
     ])
 
-    dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop",
+    dataset = ICLNUIMDataset("./data/living_room_traj2_loop",
                              sampleOutput=True,
                              inverse_depth=False,
                              cacheItems=False,

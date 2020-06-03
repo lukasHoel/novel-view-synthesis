@@ -51,7 +51,7 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
         num_files = len(files)
         # Check if there exist saved files from that scene, last saved index, starting indexing from there
         if num_files > 0:
-            regex = r"img_(\d+)_\d+\.\w+"                            # Regex to extract data indices
+            regex = r"{}_(\d+)_\d+\.\w+".format(scene)               # Regex to extract data indices
             func = lambda text: int(re.search(regex, text).group(1)) # Extract each index
             file_idx = max(map(func, files)) + 1                     # Find last used index, use +1
             print("Warning: {} exists:\n* Number of files: {}\n* Last used index under path: {}".format(full_path, num_files, file_idx-1))
@@ -61,26 +61,26 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
     cam_batch0, cam_batch1 = batch["cameras"]             # List of size n (different views)
     semantic_batch0, semantic_batch1 = batch["semantics"] # List of size n (different views)
     
-    file_prefix = os.path.join(full_path, "img_")
+    file_prefix = os.path.join(full_path, scene)
     cam_file_content = "{:<12} = {}';\n"
     batch_size = batch["images"][0].shape[0]
 
     for batch_idx in range(batch_size):
         curr_file_idx = str(file_idx + batch_idx)
-        template = file_prefix + curr_file_idx + "_{pair_id}.{ext}"
+        template = file_prefix + "_" + curr_file_idx + "_{pair_id}.{ext}"
         
-        # Save RGB images (img_idx_pairid.png)
+        # Save RGB images (scene_idx_pairid.png)
         img0, img1 = img_batch0[batch_idx].cpu(), img_batch1[batch_idx].cpu()
         save_image(img0, template.format(pair_id=0, ext='png'))
         save_image(img1, template.format(pair_id=1, ext='png'))
 
-        # Save depth information (img_idx_pairid.depth)
+        # Save depth information (scene_idx_pairid.depth)
         depth0, depth1 = depth_batch0[batch_idx].squeeze(0).cpu().numpy().ravel(),\
                          depth_batch1[batch_idx].squeeze(0).cpu().numpy().ravel()
         np.savetxt(template.format(pair_id=0, ext='depth'), depth0, fmt='%.5f', delimiter=' ', newline=' ')
         np.savetxt(template.format(pair_id=1, ext='depth'), depth1, fmt='%.5f', delimiter=' ', newline=' ')
 
-        # Save camera parameters (img_idx_pairid.txt)
+        # Save camera parameters (scene_idx_pairid.txt)
         # NOTE: According to SynSin implementation of get_camera_matrices (@camera_transformations.py):
         # P: World->Cam, Pinv: Cam->World
         P0, K0, Pinv0, Kinv0 = cam_batch0["P"][batch_idx],\
@@ -107,13 +107,13 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
         with open(template.format(pair_id=1, ext='txt'), 'w+') as f:
             f.write(info)
 
-        # Save semantics in the form of int IDs (img_idx_pairid.semantic)
+        # Save semantics in the form of int IDs (scene_idx_pairid.semantic)
         semantic0, semantic1 = semantic_batch0[batch_idx].squeeze(0).cpu().numpy().ravel(),\
                                semantic_batch1[batch_idx].squeeze(0).cpu().numpy().ravel()
         np.savetxt(template.format(pair_id=0, ext='semantic'), semantic0, fmt='%d', delimiter=' ', newline=' ')
         np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1, fmt='%d', delimiter=' ', newline=' ')
 
-        print("Files created: img_{}_{{0,1}}.{{png,depth,txt,semantic}}".format(curr_file_idx))
+        print("Files created: {}_{}_{{0,1}}.{{png,depth,txt,semantic}}".format(scene, curr_file_idx))
         num_files += 8
 
     print("Saving completed. Total number of files under {}: {}\n".format(full_path, num_files))
