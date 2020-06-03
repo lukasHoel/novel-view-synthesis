@@ -198,7 +198,7 @@ class ArgumentParser:
 
     def add_train_parameters(self):
         training = self.parser.add_argument_group("training")
-        training.add_argument("--num_workers", type=int, default=0)
+        training.add_argument("--num_workers", type=int, default=1)
         training.add_argument("--start-epoch", type=int, default=0)
         training.add_argument("--num-accumulations", type=int, default=1)
         training.add_argument("--lr", type=float, default=1e-3)

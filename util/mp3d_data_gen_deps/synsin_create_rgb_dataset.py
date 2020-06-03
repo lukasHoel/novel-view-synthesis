@@ -92,7 +92,7 @@ class RandomImageGenerator(object):
         # self.vectorize = vectorize
         self.vectorize = False
 
-        print("gpu_id", gpu_id)
+        # print("gpu_id", gpu_id)
         resolution = opts.W
         if opts.use_semantics:
             sensors = ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]
@@ -124,12 +124,11 @@ class RandomImageGenerator(object):
             "/home/cengerkin/Desktop/novel-view-synthesis/util/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
         )
         self.dataset_name = config.DATASET.TYPE
-        print(data_dir)
+        # print(data_dir)
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
         data_path = os.path.join(data_dir, "dataset_one_ep_per_scene.json.gz")
         # Creates a dataset where each episode is a random spawn point in each scene.
-        print("One ep per scene", flush=True)
         if not (os.path.exists(data_path)):
             print("Creating dataset...", flush=True)
             dataset = make_dataset(config.DATASET.TYPE, config=config.DATASET)
@@ -416,16 +415,23 @@ class RandomImageGenerator(object):
             P, Pinv = get_camera_matrices(position=position, rotation=rotation)
             cameras += [{"P": P, "Pinv": Pinv, "K": self.K, "Kinv": self.invK}]
 
+        scene_path = self.env_sim._current_scene
+
         self.num_samples += 1
         if len(semantics) > 0:
             return {
+                "scene_path": scene_path, # Note type: string
+                # "sample_count": self.num_samples,
                 "images": rgbs, # NOTE: type: list
                 "depths": depths, # NOTE: type: list
                 "cameras": cameras, # NOTE: type: list of dicts
                 "semantics": semantics, # NOTE: type: list
             }
-
-        return {"images": rgbs, "depths": depths, "cameras": cameras}
+        return {"scene_path": scene_path, 
+                # "sample_count": self.num_samples, 
+                "images": rgbs, 
+                "depths": depths, 
+                "cameras": cameras}
 
     def get_sample(self, index, num_views, isTrain):
         if self.vectorize:
