@@ -60,20 +60,21 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
                              cacheItems=cacheItems,
                              transform=transform)
 
-    def parse_directories(self):
-        folder_names = os.listdir(self.path)
-        full_folder_paths = map(lambda x: os.path.join(self.path, x), folder_names)
+    def load_data(self, dir_content):
+        full_folder_paths = map(lambda x: os.path.join(self.path, x), dir_content)
         files = []
         for i, folder in enumerate(full_folder_paths):
             for file in os.listdir(folder):
-                files.append(os.path.join(folder_names[i], file))
+                files.append(os.path.join(dir_content[i], file))
         files = sorted(files)
 
-        self.img = list(filter(lambda x: x.endswith('.png'), files))
-        self.depth = list(filter(lambda x: x.endswith('.depth'), files))
-        self.depth_binary = list(filter(lambda x: x.endswith('.depth.npy'), files))
-        self.has_binary_depth = len(self.depth_binary) > 0
-        self.cam = list(filter(lambda x: x.endswith('.txt'), files))
+        img = list(filter(lambda x: x.endswith('.png'), files))
+        depth = list(filter(lambda x: x.endswith('.depth'), files))
+        depth_binary = list(filter(lambda x: x.endswith('.depth.npy'), files))
+        has_binary_depth = len(depth_binary) > 0
+        cam = list(filter(lambda x: x.endswith('.txt'), files))
+
+        return img, depth, depth_binary, has_binary_depth, cam
 
     def modify_depth(self, depth):
         return depth # nothing to do here

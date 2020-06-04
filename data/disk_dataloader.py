@@ -71,20 +71,7 @@ class DiskDataset(Dataset, ABC):
 
         self.path = path
         dir_content = os.listdir(path)
-        full_paths = map(lambda x: os.path.join(self.path, x), dir_content)
-        contains_dir = any(filter(os.path.isdir, full_paths))
-
-        # MP3D: Contains folder per scene
-        if contains_dir:
-            self.parse_directories()
-
-        # ICL-NUIM: Contains files only
-        else:
-            self.img = sorted([f for f in dir_content if f.endswith('.png')])
-            self.depth = sorted([f for f in dir_content if f.endswith('.depth')])
-            self.depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy')])
-            self.has_binary_depth = len(self.depth_binary) > 0
-            self.cam = sorted([f for f in dir_content if f.endswith('.txt')])
+        self.img, self.depth, self.depth_binary, self.has_binary_depth, self.cam = self.load_data(dir_content)
 
         self.size = len(self.img)
 
@@ -156,7 +143,7 @@ class DiskDataset(Dataset, ABC):
         pass
 
     @abstractmethod
-    def parse_directories(self):
+    def load_data(self, dir_content):
         pass
 
     @abstractmethod

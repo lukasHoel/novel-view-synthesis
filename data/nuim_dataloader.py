@@ -117,8 +117,14 @@ class ICLNUIMDataset(DiskDataset):
 
         return z
 
-    def parse_directories(self):
-        pass
+    def load_data(self, dir_content):
+        img = sorted([f for f in dir_content if f.endswith('.png')])
+        depth = sorted([f for f in dir_content if f.endswith('.depth')])
+        depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy')])
+        has_binary_depth = len(depth_binary) > 0
+        cam = sorted([f for f in dir_content if f.endswith('.txt')])
+
+        return img, depth, depth_binary, has_binary_depth, cam
 
 
 def getEulerAngles(R):
@@ -138,7 +144,7 @@ def test():
         torchvision.transforms.ToTensor(),
     ])
 
-    dataset = ICLNUIMDataset("./data/living_room_traj2_loop",
+    dataset = ICLNUIMDataset("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop",
                              sampleOutput=True,
                              inverse_depth=False,
                              cacheItems=False,
