@@ -121,7 +121,7 @@ class RandomImageGenerator(object):
             opts.scenes_dir,
         )
         data_dir = os.path.join(
-            "/home/lukas/Desktop/git/novel-view-synthesis/util/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
+            "/home/lukas/Desktop/git/novel-view-synthesis/util/scripts/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
         )
         self.dataset_name = config.DATASET.TYPE
         # print(data_dir)
