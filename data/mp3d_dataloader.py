@@ -68,11 +68,12 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
                 files.append(os.path.join(dir_content[i], file))
         files = sorted(files)
 
-        img = list(filter(lambda x: x.endswith('.png'), files))
-        depth = list(filter(lambda x: x.endswith('.depth'), files))
-        depth_binary = list(filter(lambda x: x.endswith('.depth.npy'), files))
+        # only take the _0 to be chosen and let _1 always be the output pair. This way we do not use data twice!
+        img = list(filter(lambda x: x.endswith('_0.png'), files))
+        depth = list(filter(lambda x: x.endswith('_0.depth'), files))
+        depth_binary = list(filter(lambda x: x.endswith('_0.depth.npy'), files))
         has_binary_depth = len(depth_binary) > 0
-        cam = list(filter(lambda x: x.endswith('.txt'), files))
+        cam = list(filter(lambda x: x.endswith('_0.txt'), files))
 
         return img, depth, depth_binary, has_binary_depth, cam
 
@@ -83,18 +84,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
         return MP3D_Habitat_Offline_Dataset.K, MP3D_Habitat_Offline_Dataset.Kinv
 
     def create_input_to_output_sample_map(self):
-        regex = r"\w+_\d+_(\d+).\w+"
-        inputToOutputIndex = []
-        
-        for idx in range(self.size):
-            pair_id = int(re.search(regex, self.img[idx]).group(1))
-            if pair_id == 0:
-                inputToOutputIndex.append(idx+1)
-            else:
-                inputToOutputIndex.append(idx-1)
-            # NOTE: n > 2 views, current implementation should be changed
-
-        return inputToOutputIndex
+        return [idx + 1 for idx in range(self.size)] # since we have loaded only the _0 files, the idx+1 file will always be the corresponding _1 file
 
 
 def getEulerAngles(R):
