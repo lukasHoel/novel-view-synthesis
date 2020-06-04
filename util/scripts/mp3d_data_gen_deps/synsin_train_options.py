@@ -148,7 +148,7 @@ class ArgumentParser:
         dataset_params = self.parser.add_argument_group("data")
         dataset_params.add_argument("--dataset", type=str, default="mp3d")
         dataset_params.add_argument(
-            "--use_semantics", action="store_true", default=False
+            "--use_semantics", action="store_true", default=True
         )
         dataset_params.add_argument(
             "--config",
@@ -279,9 +279,9 @@ class ArgumentParser:
             default="./modelcheckpoints/%s/",
         )
 
-        training.add_argument("--batch-size", type=int, default=16)
+        training.add_argument("--samples_per_scene", type=int, default=16)
         training.add_argument("--continue_epoch", type=int, default=0)
-        training.add_argument("--max_epoch", type=int, default=500)
+        training.add_argument("--max_runs", type=int, default=90)
         training.add_argument("--folder_to_save", type=str, default="outpaint")
         training.add_argument(
             "--model-epoch-path",
@@ -335,7 +335,7 @@ def get_log_path(timestamp, opts):
             timestamp,
             opts.folder_to_save,
             opts.lr,
-            opts.batch_size,
+            opts.samples_per_scene,
             opts.model_type,
             opts.splatter,
             opts.noise,
@@ -361,7 +361,7 @@ def get_model_path(timestamp, opts):
         timestamp,
         opts.folder_to_save,
         opts.lr,
-        opts.batch_size,
+        opts.samples_per_scene,
         opts.model_type,
         opts.splatter,
         opts.noise,

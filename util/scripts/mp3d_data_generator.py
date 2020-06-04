@@ -36,11 +36,9 @@ def split_RT(RT):
 def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focusing on image pairs for now.
     # Create subfolder using name of the scene
     regex = r".*/(\w+)\.glb"
-    scene_path = batch["scene_path"][0]           # List of size batch_size
+    scene_path = batch["scene_path"][0]           # List of size samples_per_scene
     scene = re.search(regex, scene_path).group(1)
     full_path = os.path.join(folder, scene)
-    file_idx = 0
-    num_files = 0
 
     print("\nSaving under directory:", full_path)
     
@@ -51,10 +49,7 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
         num_files = len(files)
         # Check if there exist saved files from that scene, last saved index, starting indexing from there
         if num_files > 0:
-            regex = r"{}_(\d+)_\d+\.\w+".format(scene)               # Regex to extract data indices
-            func = lambda text: int(re.search(regex, text).group(1)) # Extract each index
-            file_idx = max(map(func, files)) + 1                     # Find last used index, use +1
-            print("Warning: {} exists:\n* Number of files: {}\n* Last used index under path: {}".format(full_path, num_files, file_idx-1))
+            print("Warning: Files under {} will be overwritten.".format(full_path))
 
     img_batch0, img_batch1 = batch["images"]              # List of size n (different views)
     depth_batch0, depth_batch1 = batch["depths"]          # List of size n (different views)
@@ -63,10 +58,10 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
     
     file_prefix = os.path.join(full_path, scene)
     cam_file_content = "{:<12} = {}';\n"
-    batch_size = batch["images"][0].shape[0]
+    samples_per_scene = batch["images"][0].shape[0]
 
-    for batch_idx in range(batch_size):
-        curr_file_idx = str(file_idx + batch_idx)
+    for batch_idx in range(samples_per_scene):
+        curr_file_idx = str(batch_idx)
         template = file_prefix + "_" + curr_file_idx + "_{pair_id}.{ext}"
         
         # Save RGB images (scene_idx_pairid.png)
@@ -114,9 +109,8 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
         np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1, fmt='%d', delimiter=' ', newline=' ')
 
         print("Files created: {}_{}_{{0,1}}.{{png,depth,txt,semantic}}".format(scene, curr_file_idx))
-        num_files += 8
 
-    print("Saving completed. Total number of files under {}: {}\n".format(full_path, num_files))
+    print("Saving completed. Total number of files under {}: {}\n".format(full_path, 8*samples_per_scene))
 
 
 if __name__ == "__main__":
@@ -136,13 +130,13 @@ if __name__ == "__main__":
     # Relevant flags:
     # Modifiable @train_options.py:
       # Flags to modify:
-      # python data_generator.py --max_epoch 2 --batch-size 5 --normalize_image --use_semantics --config full_path_to/pointnav_rgbd.yaml
-        # --max_epoch 2 (default: 500)
-        # --batch-size 5 (default: 16)
+      # python mp3d_data_generator.py --max_runs 2 --samples_per_scene 5 --normalize_image --config full_path_to/pointnav_rgbd.yaml
+        # --max_runs 2 (default: 90)
+        # --samples_per_scene 5 (default: 16)
         # --normalize_image True (default: False)
-        # --use_semantics True (default: False)
         # --config full_path_to/pointnav_rgbd.yaml
       # Flags that can stay the same:
+        # --use_semantics True (default: True)
         # --num_workers 1 (default: 1)
         # --render_ids 0 (default: [0])
         # --gpu_ids 0 (default: 0)
@@ -159,7 +153,7 @@ if __name__ == "__main__":
         # scenes_dir full_path_to/scene_datasets (which is top level directory containing 90 folders each of which include following 4 files *.glb *.house *.navmesh *.ply)
 
     # Habitat behaviour depending on --num_workers:
-        # num_worker: 0 -> Use single env for all epochs: Keep sampling from the same env througout training
+        # num_worker: 0 -> Use single env for all epochs: Keep sampling from the same env throughout training
         # num_worker: 1 -> Use single env within an epoch: Sample batch from same env, but change env to sample at every epoch.
         # num_worker: 2 -> Run 2 different envs at every epoch epoch, but sample the batch from one of these only (probably from env of the default agent), change envs over epochs
 
@@ -174,7 +168,7 @@ if __name__ == "__main__":
     train_data_loader = DataLoader(
         dataset=train_set,
         num_workers=opts.num_workers,
-        batch_size=opts.batch_size,
+        batch_size=opts.samples_per_scene,
         shuffle=False,
         drop_last=True,
         pin_memory=False,
@@ -185,6 +179,10 @@ if __name__ == "__main__":
     except FileExistsError:
         pass
 
-    for _ in range(opts.max_epoch):
+    for _ in range(opts.max_runs):
         batch = next(iter(train_data_loader))
         save_data(batch, dataset_path)
+
+        # Early termination if max_runs >> 90
+        if len(os.listdir(dataset_path)) == 90:
+            break
