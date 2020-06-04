@@ -177,7 +177,7 @@ def test():
     plt.imshow(img)
     fig.add_subplot(1, 3, 2)
     plt.title("Input Depth Map")
-    plt.imshow(depth)
+    plt.imshow(depth, cmap="gray")
     fig.add_subplot(1, 3, 3)
     plt.title("Output Image")
     plt.imshow(out_img)
