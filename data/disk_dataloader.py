@@ -136,18 +136,44 @@ class DiskDataset(Dataset, ABC):
 
     @abstractmethod
     def load_int_cam(self):
+        """
+        Calculates the K and Kinv matrix for the dataset.
+        :return: K, Kinv
+        """
         pass
 
     @abstractmethod
     def modify_depth(self, depth):
+        """
+        Calculates modifications necessary for the concrete dataset after reading depth from file.
+        :param depth: depth as read from file
+        :return: depth changed as needed
+        """
         pass
 
     @abstractmethod
     def load_data(self, dir_content):
+        """
+        Each dataset defines how to load the data:
+            - img: list of all paths to images
+            - depth: list of all paths to depth files in .depth format
+            - depth_binary: list of all paths to depth files in .depth.npy format
+            - has_binary_depth: if depth_binary list is empty or not
+            - cam: list of all paths to extrinsic camera .txt files
+
+        :param dir_content: list of all files in the root path (self.path)
+
+        :return: tuple (img, depth, depth_binary, has_binary_depth, cam)
+        """
         pass
 
     @abstractmethod
     def create_input_to_output_sample_map(self):
+        """
+        Each dataset decides how to associate an img in self.img to an output image in self.img.
+
+        :return: list of length self.img where the i-th entry is an index of self.img specifying the output image.
+        """
         pass
 
     def __getitem__(self, idx):
