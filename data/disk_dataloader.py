@@ -78,8 +78,7 @@ class DiskDataset(Dataset, ABC):
 
         # LOAD DATA
         dir_content = os.listdir(path)
-        self.img, self.depth, self.depth_binary, self.has_binary_depth, self.cam = self.load_data(dir_content)
-        self.size = len(self.img)
+        self.img, self.depth, self.depth_binary, self.has_binary_depth, self.cam, self.size = self.load_data(dir_content)
 
         # CREATE OUTPUT PAIR
         if self.sampleOutput:
@@ -166,10 +165,11 @@ class DiskDataset(Dataset, ABC):
             - depth_binary: list of all paths to depth files in .depth.npy format
             - has_binary_depth: if depth_binary list is empty or not
             - cam: list of all paths to extrinsic camera .txt files
+            - size: how many data samples are available
 
         :param dir_content: list of all files in the root path (self.path)
 
-        :return: tuple (img, depth, depth_binary, has_binary_depth, cam)
+        :return: tuple (img, depth, depth_binary, has_binary_depth, cam, size)
         """
         pass
 
@@ -178,7 +178,7 @@ class DiskDataset(Dataset, ABC):
         """
         Each dataset decides how to associate an img in self.img to an output image in self.img.
 
-        :return: list of length self.img where the i-th entry is an index of self.img specifying the output image.
+        :return: list of length self.img where the i-th entry is a path to the output image.
         """
         pass
 
