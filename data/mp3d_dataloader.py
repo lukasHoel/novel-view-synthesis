@@ -78,26 +78,30 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
         # append the _1 paths at the end of each list and set size to len/2, s.t. the dataloader only accesses the _0 items
         out_img = list(filter(lambda x: x.endswith('_1.png'), files))
         if len(out_img) != len(img):
-            raise ValueError("number of images with _0 (%) and _1 (%) not identical".format(len(img), len(out_img)))
+            raise ValueError("number of images with _0 ({}) and _1 ({}) not identical".format(len(img), len(out_img)))
         else:
+            print("number of images with _0 ({}) and _1 ({}) identical".format(len(img), len(out_img)))
             img.extend(out_img)
 
         out_depth = list(filter(lambda x: x.endswith('_1.depth'), files))
         if len(out_depth) != len(depth):
-            raise ValueError("number of .depth files with _0 (%) and _1 (%) not identical".format(len(img), len(out_img)))
+            raise ValueError("number of .depth files with _0 ({}) and _1 ({}) not identical".format(len(depth), len(out_depth)))
         else:
+            print("number of .depth files with _0 ({}) and _1 ({}) identical".format(len(depth), len(out_depth)))
             depth.extend(out_depth)
 
         out_depth_binary = list(filter(lambda x: x.endswith('_1.depth.npy'), files))
         if len(out_depth_binary) != len(depth_binary):
-            raise ValueError("number of .depth.npy files with _0 (%) and _1 (%) not identical".format(len(img), len(out_img)))
+            raise ValueError("number of .depth.npy files with _0 ({}) and _1 ({}) not identical".format(len(depth_binary), len(out_depth_binary)))
         else:
+            print("number of depth.npy files with _0 ({}) and _1 ({}) identical".format(len(depth_binary), len(out_depth_binary)))
             depth_binary.extend(out_depth_binary)
 
         out_cam = list(filter(lambda x: x.endswith('_1.txt'), files))
         if len(out_cam) != len(cam):
-            raise ValueError("number of camera .txt files with _0 (%) and _1 (%) not identical".format(len(img), len(out_img)))
+            raise ValueError("number of camera .txt files with _0 ({}) and _1 ({}) not identical".format(len(cam), len(out_cam)))
         else:
+            print("number of camera .txt with _0 ({}) and _1 ({}) identical".format(len(cam), len(out_cam)))
             cam.extend(out_cam)
 
         return img, depth, depth_binary, has_binary_depth, cam, len(img)//2
@@ -127,7 +131,7 @@ def test():
         torchvision.transforms.ToTensor(),
     ])
 
-    dataset = MP3D_Habitat_Offline_Dataset("./data/mp3d_dataset/",
+    dataset = MP3D_Habitat_Offline_Dataset("/home/lukas/datasets/Matterport3D/data/v1/tasks/mp3d_habitat/rendered",
                              in_size=256,
                              sampleOutput=True,
                              inverse_depth=False,
