@@ -178,7 +178,7 @@ class DiskDataset(Dataset, ABC):
         """
         Each dataset decides how to associate an img in self.img to an output image in self.img.
 
-        :return: list of length self.img where the i-th entry is a path to the output image.
+        :return: list of length self.img where the i-th entry is an index of self.img specifying the output image.
         """
         pass
 
