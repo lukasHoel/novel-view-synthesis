@@ -51,10 +51,17 @@ class DiskDataset(Dataset, ABC):
         :param cacheItems: If true, all items will be stored in RAM dictionary, once they were accessed.
         :param transform: transform that should be applied to the input image AND the target depth
         '''
-        self.transform = transform
-        self.K, self.Kinv = self.load_int_cam()
-        self.imageInputShape = imageInputShape
 
+        # SAVE INPUT ARGUMENTS
+        self.imageInputShape = imageInputShape
+        self.inverse_depth = inverse_depth
+        self.maxDepth = maxDepth
+        self.path = path
+        self.sampleOutput = sampleOutput
+        self.cacheItems = cacheItems
+
+        # SAVE TRANSFORM OBJECT IN CLASS
+        self.transform = transform
         # Fix for this issue: https://github.com/pytorch/vision/issues/2194
         if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
             self.transform_depth = torchvision.transforms.Compose([
@@ -66,20 +73,19 @@ class DiskDataset(Dataset, ABC):
         else:
             self.transform_depth = self.transform
 
-        self.inverse_depth = inverse_depth
-        self.maxDepth = maxDepth
+        # LOAD K
+        self.K, self.Kinv = self.load_int_cam()
 
-        self.path = path
+        # LOAD DATA
         dir_content = os.listdir(path)
         self.img, self.depth, self.depth_binary, self.has_binary_depth, self.cam = self.load_data(dir_content)
-
         self.size = len(self.img)
 
-        self.sampleOutput = sampleOutput
+        # CREATE OUTPUT PAIR
         if self.sampleOutput:
             self.inputToOutputIndex = self.create_input_to_output_sample_map()
 
-        self.cacheItems = cacheItems
+        # SETUP EMPTY CACHE
         self.itemCache = [None for i in range(self.size)]
 
     def load_image(self, idx):
