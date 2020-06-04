@@ -17,7 +17,7 @@ from habitat.config.default import get_config
 from habitat.datasets import make_dataset
 
 from util.camera_transformations import get_camera_matrices
-from util.mp3d_data_gen_deps.synsin_jitter import jitter_quaternions
+from util.scripts.mp3d_data_gen_deps.synsin_jitter import jitter_quaternions
 
 
 def _load_datasets(config_keys, dataset, data_path, scenes_path, num_workers):
@@ -121,7 +121,7 @@ class RandomImageGenerator(object):
             opts.scenes_dir,
         )
         data_dir = os.path.join(
-            "/home/cengerkin/Desktop/novel-view-synthesis/util/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
+            "/home/lukas/Desktop/git/novel-view-synthesis/util/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
         )
         self.dataset_name = config.DATASET.TYPE
         # print(data_dir)

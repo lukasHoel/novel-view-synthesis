@@ -5,8 +5,8 @@ from torch.utils.data import DataLoader
 from torchvision.utils import save_image # Added
 
 import numpy as np # Added
-from util.mp3d_data_gen_deps.synsin_options import get_dataset
-from util.mp3d_data_gen_deps.synsin_train_options import ArgumentParser, get_timestamp
+from util.scripts.mp3d_data_gen_deps.synsin_options import get_dataset
+from util.scripts.mp3d_data_gen_deps.synsin_train_options import ArgumentParser, get_timestamp
 import os
 import re
 
@@ -179,7 +179,7 @@ if __name__ == "__main__":
         drop_last=True,
         pin_memory=False,
     )
-    dataset_path = "./data/mp3d_dataset/"
+    dataset_path = "/home/lukas/datasets/Matterport3D/data/v1/tasks/mp3d_habitat/rendered"
     try:
         os.mkdir(dataset_path)
     except FileExistsError:

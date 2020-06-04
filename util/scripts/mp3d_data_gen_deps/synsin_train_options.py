@@ -153,7 +153,7 @@ class ArgumentParser:
         dataset_params.add_argument(
             "--config",
             type=str,
-            default="/home/cengerkin/Desktop/" + "habitat-api/configs/tasks/pointnav_rgbd.yaml",
+            default="/home/lukas/Desktop/git/" + "habitat-api/configs/tasks/pointnav_rgbd.yaml",
         )
         dataset_params.add_argument(
             "--current_episode_train", type=int, default=-1

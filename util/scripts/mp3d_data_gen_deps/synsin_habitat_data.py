@@ -3,7 +3,7 @@
 import numpy as np
 import torch
 
-from util.mp3d_data_gen_deps.synsin_create_rgb_dataset import RandomImageGenerator
+from util.scripts.mp3d_data_gen_deps.synsin_create_rgb_dataset import RandomImageGenerator
 
 
 class HabitatImageGenerator(torch.utils.data.Dataset):
