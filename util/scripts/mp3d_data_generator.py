@@ -2,11 +2,12 @@
 
 import torch
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image # Added
+from torchvision.utils import save_image
 
-import numpy as np # Added
+import multiprocessing
+import numpy as np
 from util.scripts.mp3d_data_gen_deps.synsin_options import get_dataset
-from util.scripts.mp3d_data_gen_deps.synsin_train_options import ArgumentParser, get_timestamp
+from util.scripts.mp3d_data_gen_deps.synsin_train_options import ArgumentParser
 import os
 import re
 
@@ -33,10 +34,10 @@ def split_RT(RT):
     cam_dir = np.array2string(cam_dir, formatter=formatter, max_line_width=np.inf, separator=", ")
     return cam_pos, cam_up, cam_dir
 
-def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focusing on image pairs for now.
+def save_data(batch, folder, batch_idx): # TODO: extend it to n views, n is default 2, focusing on image pairs for now.
     # Create subfolder using name of the scene
     regex = r".*/(\w+)\.glb"
-    scene_path = batch["scene_path"][0]           # List of size samples_per_scene
+    scene_path = batch["scene_path"][0]           # List of size sample_batch_size
     scene = re.search(regex, scene_path).group(1)
     full_path = os.path.join(folder, scene)
 
@@ -45,11 +46,7 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
     try:
         os.mkdir(full_path)
     except FileExistsError:
-        files = os.listdir(full_path)
-        num_files = len(files)
-        # Check if there exist saved files from that scene, last saved index, starting indexing from there
-        if num_files > 0:
-            print("Warning: Files under {} will be overwritten.".format(full_path))
+        pass
 
     img_batch0, img_batch1 = batch["images"]              # List of size n (different views)
     depth_batch0, depth_batch1 = batch["depths"]          # List of size n (different views)
@@ -58,30 +55,35 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
     
     file_prefix = os.path.join(full_path, scene)
     cam_file_content = "{:<12} = {}';\n"
-    samples_per_scene = batch["images"][0].shape[0]
+    sample_batch_size = batch["images"][0].shape[0]
 
-    for batch_idx in range(samples_per_scene):
-        curr_file_idx = str(batch_idx)
+    start_idx = batch_idx * sample_batch_size
+
+    for sample_idx in range(sample_batch_size):
+        curr_file_idx = str(start_idx + sample_idx)
         template = file_prefix + "_" + curr_file_idx + "_{pair_id}.{ext}"
         
         # Save RGB images (scene_idx_pairid.png)
-        img0, img1 = img_batch0[batch_idx].cpu(), img_batch1[batch_idx].cpu()
+        img0, img1 = img_batch0[sample_idx].cpu(), img_batch1[sample_idx].cpu()
         save_image(img0, template.format(pair_id=0, ext='png'))
         save_image(img1, template.format(pair_id=1, ext='png'))
 
         # Save depth information (scene_idx_pairid.depth)
-        depth0, depth1 = depth_batch0[batch_idx].squeeze(0).cpu().numpy().ravel(),\
-                         depth_batch1[batch_idx].squeeze(0).cpu().numpy().ravel()
+        depth0, depth1 = depth_batch0[sample_idx].squeeze(0).cpu().numpy().ravel(),\
+                         depth_batch1[sample_idx].squeeze(0).cpu().numpy().ravel()
         np.savetxt(template.format(pair_id=0, ext='depth'), depth0, fmt='%.5f', delimiter=' ', newline=' ')
         np.savetxt(template.format(pair_id=1, ext='depth'), depth1, fmt='%.5f', delimiter=' ', newline=' ')
+        # TODO:
+        # np.save(template.format(pair_id=0, ext='depth.npy'), depth0)
+        # np.save(template.format(pair_id=1, ext='depth.npy'), depth1)
 
         # Save camera parameters (scene_idx_pairid.txt)
         # NOTE: According to SynSin implementation of get_camera_matrices (@camera_transformations.py):
         # P: World->Cam, Pinv: Cam->World
-        P0, K0, Pinv0, Kinv0 = cam_batch0["P"][batch_idx],\
-                               cam_batch0["K"][batch_idx],\
-                               cam_batch0["Pinv"][batch_idx],\
-                               cam_batch0["Kinv"][batch_idx]
+        P0, K0, Pinv0, Kinv0 = cam_batch0["P"][sample_idx],\
+                               cam_batch0["K"][sample_idx],\
+                               cam_batch0["Pinv"][sample_idx],\
+                               cam_batch0["Kinv"][sample_idx]
 
         cam_pos, cam_up, cam_dir = split_RT(Pinv0.cpu().numpy())
         info = cam_file_content.format("cam_pos", cam_pos)
@@ -90,10 +92,10 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
         with open(template.format(pair_id=0, ext='txt'), 'w+') as f:
             f.write(info)
 
-        P1, K1, Pinv1, Kinv1 = cam_batch1["P"][batch_idx],\
-                               cam_batch1["K"][batch_idx],\
-                               cam_batch1["Pinv"][batch_idx],\
-                               cam_batch1["Kinv"][batch_idx]
+        P1, K1, Pinv1, Kinv1 = cam_batch1["P"][sample_idx],\
+                               cam_batch1["K"][sample_idx],\
+                               cam_batch1["Pinv"][sample_idx],\
+                               cam_batch1["Kinv"][sample_idx]
 
         cam_pos, cam_up, cam_dir = split_RT(Pinv1.cpu().numpy())
         info = cam_file_content.format("cam_pos", cam_pos)
@@ -103,14 +105,14 @@ def save_data(batch, folder): # TODO: extend it to n views, n is default 2, focu
             f.write(info)
 
         # Save semantics in the form of int IDs (scene_idx_pairid.semantic)
-        semantic0, semantic1 = semantic_batch0[batch_idx].squeeze(0).cpu().numpy().ravel(),\
-                               semantic_batch1[batch_idx].squeeze(0).cpu().numpy().ravel()
+        semantic0, semantic1 = semantic_batch0[sample_idx].squeeze(0).cpu().numpy().ravel(),\
+                               semantic_batch1[sample_idx].squeeze(0).cpu().numpy().ravel()
         np.savetxt(template.format(pair_id=0, ext='semantic'), semantic0, fmt='%d', delimiter=' ', newline=' ')
         np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1, fmt='%d', delimiter=' ', newline=' ')
 
         print("Files created: {}_{}_{{0,1}}.{{png,depth,txt,semantic}}".format(scene, curr_file_idx))
 
-    print("Saving completed. Total number of files under {}: {}\n".format(full_path, 8*samples_per_scene))
+    print("Saving completed. Total number of files under {}: {}\n".format(full_path, 8*sample_batch_size))
 
 
 if __name__ == "__main__":
@@ -130,11 +132,14 @@ if __name__ == "__main__":
     # Relevant flags:
     # Modifiable @train_options.py:
       # Flags to modify:
-      # python mp3d_data_generator.py --max_runs 2 --samples_per_scene 5 --normalize_image --config full_path_to/pointnav_rgbd.yaml
+      # python mp3d_data_generator.py --max_runs 2 --sample_batch_count 5 --sample_batch_size 5 --normalize_image --data_render_path X --habitat_api_prefix Y
         # --max_runs 2 (default: 90)
-        # --samples_per_scene 5 (default: 16)
+        # --sample_batch_count 5 (default: 1)
+        # --sample_batch_size 5 (default: 100)
         # --normalize_image True (default: False)
-        # --config full_path_to/pointnav_rgbd.yaml
+        # --envs scene_id1 scene_id2 (default: []) 
+        # --data_render_path path_to_dataset_to_be_generated (required, e.g. "./data/mp3d_dataset")
+        # --habitat_api_prefix path_to_habitat-api (required, e.g. "'path_prefix' part of path_prefix/habitat-api")
       # Flags that can stay the same:
         # --use_semantics True (default: True)
         # --num_workers 1 (default: 1)
@@ -146,43 +151,41 @@ if __name__ == "__main__":
         # --images_before_reset 1000 (default: 1000)
         # --seed 0 (default: 0)
         # -W 256 (default:256)
-    # Static 'flags' to be adjusted @options.py
-        # train_data_path full_path_to/train.json.gz
-        # val_data_path full_path_to/val.json.gz
-        # test_data_path full_path_to/test.json.gz
-        # scenes_dir full_path_to/scene_datasets (which is top level directory containing 90 folders each of which include following 4 files *.glb *.house *.navmesh *.ply)
-
-    # Habitat behaviour depending on --num_workers:
-        # num_worker: 0 -> Use single env for all epochs: Keep sampling from the same env throughout training
-        # num_worker: 1 -> Use single env within an epoch: Sample batch from same env, but change env to sample at every epoch.
-        # num_worker: 2 -> Run 2 different envs at every epoch epoch, but sample the batch from one of these only (probably from env of the default agent), change envs over epochs
 
     opts, _ = ArgumentParser().parse()
 
-    timestamp = get_timestamp()
-    print("Timestamp ", timestamp, flush=True)
+    manager = multiprocessing.Manager()
+    envs_processed = manager.list()
+    envs_to_process = manager.list(opts.envs)
 
     Dataset = get_dataset(opts)
-    train_set = Dataset("train", opts)
+    train_set = Dataset("train", envs_processed, envs_to_process, opts)
 
     train_data_loader = DataLoader(
         dataset=train_set,
         num_workers=opts.num_workers,
-        batch_size=opts.samples_per_scene,
+        batch_size=opts.sample_batch_size,
         shuffle=False,
         drop_last=True,
         pin_memory=False,
     )
-    dataset_path = "/home/lukas/datasets/Matterport3D/data/v1/tasks/mp3d_habitat/rendered"
+    dataset_path = opts.data_render_path
     try:
         os.mkdir(dataset_path)
     except FileExistsError:
         pass
 
-    for _ in range(opts.max_runs):
-        batch = next(iter(train_data_loader))
-        save_data(batch, dataset_path)
+    try:
+        for scene_idx in range(opts.max_runs):
+            batch_iter = iter(train_data_loader)
 
-        # Early termination if max_runs >> 90
-        if len(os.listdir(dataset_path)) == 90:
-            break
+            for batch_idx in range(opts.sample_batch_count):
+                batch = next(batch_iter)
+                save_data(batch, dataset_path, batch_idx)
+
+                # Keep track of processed envs
+                scene_id = batch["scene_path"][0].split("/")[-2]
+                envs_processed.append(scene_id)
+
+    except AssertionError:
+        print("No more envs to process")

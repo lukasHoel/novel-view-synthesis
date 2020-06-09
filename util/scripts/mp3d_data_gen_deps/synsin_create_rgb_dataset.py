@@ -88,7 +88,7 @@ def make_config(
 
 
 class RandomImageGenerator(object):
-    def __init__(self, split, gpu_id, opts, vectorize=False, seed=0) -> None:
+    def __init__(self, split, gpu_id, envs_processed, envs_to_process, opts, vectorize=False, seed=0) -> None:
         # self.vectorize = vectorize
         self.vectorize = False
 
@@ -121,7 +121,7 @@ class RandomImageGenerator(object):
             opts.scenes_dir,
         )
         data_dir = os.path.join(
-            "/home/lukas/Desktop/git/novel-view-synthesis/util/scripts/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
+            "./util/scripts/mp3d_data_gen_deps/scene_episodes", unique_dataset_name + "_" + split
         )
         self.dataset_name = config.DATASET.TYPE
         # print(data_dir)
@@ -153,10 +153,18 @@ class RandomImageGenerator(object):
         with gzip.open(data_path, "rt") as f:
             dataset.from_json(f.read())
 
+            envs = []
             for i in range(0, len(dataset.episodes)):
-                dataset.episodes[i].scene_id = dataset.episodes[i].scene_id.replace(
-                    '/checkpoint/erikwijmans/data/mp3d/',
-                        opts.scenes_dir + '/mp3d/')
+                scene_id = dataset.episodes[i].scene_id.split("/")[-2]
+                # Check if scene already processed
+                if scene_id not in envs_processed:
+                    # Check if user wants to process this scene (if no scene is specified then ignore this condition)
+                    if len(envs_to_process) == 0 or scene_id in envs_to_process:
+                        dataset.episodes[i].scene_id = dataset.episodes[i].scene_id.replace(
+                            '/checkpoint/erikwijmans/data/mp3d/',
+                                opts.scenes_dir + '/mp3d/')
+                        envs.append(dataset.episodes[i])
+            dataset.episodes = envs
 
         config.TASK.SENSORS = ["POINTGOAL_SENSOR"]
 

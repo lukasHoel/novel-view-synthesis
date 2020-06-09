@@ -151,9 +151,14 @@ class ArgumentParser:
             "--use_semantics", action="store_true", default=True
         )
         dataset_params.add_argument(
-            "--config",
+            "--data_render_path",     # e.g. "./data/mp3d_dataset"
             type=str,
-            default="/home/lukas/Desktop/git/" + "habitat-api/configs/tasks/pointnav_rgbd.yaml",
+            required=True
+        )
+        dataset_params.add_argument(
+            "--habitat_api_prefix",   # e.g. "'path_prefix' part of path_prefix/habitat-api"
+            type=str,
+            required=True
         )
         dataset_params.add_argument(
             "--current_episode_train", type=int, default=-1
@@ -278,8 +283,11 @@ class ArgumentParser:
             type=str,
             default="./modelcheckpoints/%s/",
         )
-
-        training.add_argument("--samples_per_scene", type=int, default=16)
+        training.add_argument(
+            "--envs", type=str, nargs="+", default=[]
+        )
+        training.add_argument("--sample_batch_count", type=int, default=1)
+        training.add_argument("--sample_batch_size", type=int, default=100)
         training.add_argument("--continue_epoch", type=int, default=0)
         training.add_argument("--max_runs", type=int, default=90)
         training.add_argument("--folder_to_save", type=str, default="outpaint")
@@ -335,7 +343,7 @@ def get_log_path(timestamp, opts):
             timestamp,
             opts.folder_to_save,
             opts.lr,
-            opts.samples_per_scene,
+            opts.sample_batch_size,
             opts.model_type,
             opts.splatter,
             opts.noise,
@@ -361,7 +369,7 @@ def get_model_path(timestamp, opts):
         timestamp,
         opts.folder_to_save,
         opts.lr,
-        opts.samples_per_scene,
+        opts.sample_batch_size,
         opts.model_type,
         opts.splatter,
         opts.noise,

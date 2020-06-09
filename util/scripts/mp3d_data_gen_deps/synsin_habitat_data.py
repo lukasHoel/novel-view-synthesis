@@ -7,7 +7,7 @@ from util.scripts.mp3d_data_gen_deps.synsin_create_rgb_dataset import RandomImag
 
 
 class HabitatImageGenerator(torch.utils.data.Dataset):
-    def __init__(self, split, opts, vectorize=True, seed=0):
+    def __init__(self, split, envs_processed, envs_to_process, opts, vectorize=True, seed=0):
         self.worker_id = 0
         self.split = split
         self.opts = opts
@@ -30,6 +30,9 @@ class HabitatImageGenerator(torch.utils.data.Dataset):
 
         self.fixed_val_images = [None] * 32  # Keep 32 examples
 
+        self.envs_processed = envs_processed
+        self.envs_to_process = envs_to_process
+
     def __len__(self):
         return 2 ** 31
 
@@ -40,6 +43,8 @@ class HabitatImageGenerator(torch.utils.data.Dataset):
                 self.opts.render_ids[
                     self.worker_id % len(self.opts.render_ids)
                 ],
+                self.envs_processed,
+                self.envs_to_process,
                 self.opts,
                 vectorize=self.vectorize,
                 seed=self.worker_id + self.seed,
@@ -51,6 +56,8 @@ class HabitatImageGenerator(torch.utils.data.Dataset):
                 self.opts.render_ids[
                     self.worker_id % len(self.opts.render_ids)
                 ],
+                self.envs_processed,
+                self.envs_to_process,
                 self.opts,
                 vectorize=self.vectorize,
                 seed=torch.randint(100, size=(1,)).item(),
@@ -69,7 +76,6 @@ class HabitatImageGenerator(torch.utils.data.Dataset):
             self.num_samples = 0
 
     def restart(self, train):
-
         if not (self.vectorize):
             if train:
                 # NOTE: Train split
