@@ -440,7 +440,7 @@ class NVS_Solver(object):
               model,
               train_loader,
               val_loader,
-              checkpoint_handler,
+              checkpoint_handler=None,
               start_epoch=0,
               num_epochs=10,
               log_nth_iter=1,
@@ -603,10 +603,12 @@ class NVS_Solver(object):
             self.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
 
             # Create a checkpoint
-            checkpoint_handler.save_checkpoint(model.state_dict(), optim.state_dict(), epoch+1, mean_val_acc)
+            if checkpoint_handler is not None:
+                checkpoint_handler.save_checkpoint(model.state_dict(), optim.state_dict(), epoch+1, mean_val_acc)
 
         # Save the final model (if not already saved)
-        checkpoint_handler.save_final(model.state_dict(), optim.state_dict(), epoch+1, mean_val_acc)
+        if checkpoint_handler is not None:
+            checkpoint_handler.save_final(model.state_dict(), optim.state_dict(), epoch+1, mean_val_acc)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,
