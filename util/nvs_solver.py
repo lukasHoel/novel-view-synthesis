@@ -318,7 +318,7 @@ class NVS_Solver(object):
 
         self.writer.flush()
 
-    def visualize_output(self, output, take_slice=None, tag="image", step=0, depth=False):
+    def visualize_output(self, output, take_slice=None, tag="image", step=0, depth=True):
         """
         Generic method for visualizing a single image or a whole batch
         Parameters
