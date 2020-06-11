@@ -69,6 +69,7 @@ class NovelViewSynthesisModel(nn.Module):
         self.rad_pow = rad_pow
         self.accumulation = accumulation
         self.accumulation_tau = accumulation_tau
+        self.projection_mode = projection_mode
 
         # CONTROLS
         self.use_rgb_features = use_rgb_features
@@ -95,27 +96,20 @@ class NovelViewSynthesisModel(nn.Module):
 
         # 3D Points transformer
         if self.use_rgb_features:
-            self.pts_transformer = PtsManipulator(W=imageSize,
-                                                  H=imageSize,
-                                                  C=3,
-                                                  learn_feature=self.learn_feature,
-                                                  radius=self.radius,
-                                                  rad_pow=self.rad_pow,
-                                                  accumulation=self.accumulation,
-                                                  accumulation_tau=self.accumulation_tau,
-                                                  points_per_pixel=self.points_per_pixel
-                                                  )
+            C = 3
         else:
-            self.pts_transformer = PtsManipulator(W=imageSize,
-                                                  H=imageSize,
-                                                  C=self.enc_dims[-1],
-                                                  learn_feature=self.learn_feature,
-                                                  radius=self.radius,
-                                                  rad_pow=self.rad_pow,
-                                                  accumulation=self.accumulation,
-                                                  accumulation_tau=self.accumulation_tau,
-                                                  points_per_pixel=self.points_per_pixel
-                                                  )
+            C = self.enc_dims[-1]
+
+        self.pts_transformer = PtsManipulator(mode=self.projection_mode,
+                                              W=imageSize,
+                                              H=imageSize,
+                                              C=C,
+                                              learn_feature=self.learn_feature,
+                                              radius=self.radius,
+                                              rad_pow=self.rad_pow,
+                                              accumulation=self.accumulation,
+                                              accumulation_tau=self.accumulation_tau,
+                                              points_per_pixel=self.points_per_pixel)
 
         # DECODER
         # REFINEMENT NETWORK
