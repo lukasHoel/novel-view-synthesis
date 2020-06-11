@@ -1,12 +1,14 @@
 """
 Performs training, validation, testing for nvs_model.py and calculates loss and saves it to tensorboard.
-
 Author: Lukas Hoellein
 """
 
 import numpy as np
 
 from models.synthesis.synt_loss_metric import SynthesisLoss, QualityMetrics
+from models.nvs_model import NovelViewSynthesisModel
+import os
+import re
 from util.camera_transformations import invert_K, invert_RT
 
 import torch
@@ -64,12 +66,151 @@ def check_norm(img, verbose=False):
 
 # NOTE: Unused, might be used for debugging
 def change_norm(img, in_range=None, out_range=[0,1]):
-    """Based on the norm scheme of img and output the same image in the new norm scheme""" 
+    """Based on the norm scheme of img and output the same image in the new norm scheme"""
     if not in_range:
         in_range = check_norm(img)
 
     img = (img - in_range[0]) / (in_range[1] - in_range[0]) * (out_range[1] - out_range[0]) + out_range[0]
     return img
+
+class Checkpoint(object):
+    def __init__(self,
+                 model_args={},
+                 model_name="",
+                 solver_args={},
+                 solver_name="",
+                 checkpoint_path="",
+                 checkpoint_freq=1):
+        """
+
+        """
+        self.model_args = model_args
+        self.model_name = model_name
+        self.solver_args = solver_args
+        self.solver_name = solver_name
+        self.checkpoint_path = checkpoint_path
+        self.checkpoint_freq = checkpoint_freq if checkpoint_freq else 1
+        
+        self.max_val_acc = -np.inf
+        self.last_saved = -1
+
+    def print_config(self):
+        print("Checkpoint configuration:\n",
+              "Path: ", self.checkpoint_path, "\n",
+              "Frequency: ", self.checkpoint_freq, "\n",
+              "Model name: ", self.model_name, "\n",
+              "Model arguments: ", self.model_args, "\n",
+              "Solver arguments: ", self.solver_args, "\n",
+              "Solver name: ", self.solver_name, "\n",
+              "Maximum validation accuracy observed: ", self.max_val_acc, "\n",
+              "Last checkpointed epoch: ", self.last_saved, sep="")
+
+    def set_freq(self, checkpoint_freq):
+        self.checkpoint_freq = checkpoint_freq
+
+    def set_path(self, checkpoint_path):
+        self.checkpoint_path = checkpoint_path
+
+    def setup(self, start_epoch=0): 
+        """Folder setup and sanity checks for checkpoints"""
+        try:
+            os.mkdir(self.checkpoint_path)
+            print("Folder {} is succesfully created".format(self.checkpoint_path))
+
+        # Understand if it is possible to continue without overwriting the existing checkpoints
+        except FileExistsError:
+            files = os.listdir(self.checkpoint_path)                     # Read checkpoints
+            # If there are already checkpoints saved previously
+            if len(files) > 0:
+                regex = r"_(\d+)\.pt"                                    # Regex for epoch
+                func = lambda text: int(re.search(regex, text).group(1)) # Extract each epoch
+                last_epoch = max(map(func, files))                       # Find last epoch of last run
+
+                # Warn about overwriting possibility, ask for permission
+                if start_epoch < last_epoch:
+                    print(("WARNING: {} already exists.\n"+
+                        "Given start_epoch ({}) may overwrite existing checkpoints (From previous run, last_epoch was {}).\n")
+                        .format(self.checkpoint_path, start_epoch, last_epoch))
+
+                    repsonse = input("Overwrite existing? [y/N]: ")
+                    if repsonse.lower() != 'y':
+                        print("Checkpointing disabled!")
+                        self.checkpoint_freq = 0
+            # If there are no checkpoints saved previously
+            else:
+                print("WARNING: {} already exists, but overwriting is not possible.".format(self.checkpoint_path))
+
+        # Create checkpoints directory first
+        except FileNotFoundError:
+            print("Creating ../checkpoints/ folder...".format())
+            os.mkdir("../checkpoints/")
+            print("Creating {} folder...".format(self.checkpoint_path))
+            os.mkdir(self.checkpoint_path)
+            print("Folder {} is succesfully created".format(self.checkpoint_path))
+
+    def save_checkpoint(self, model_state, optim_state, epoch, val_acc):
+        """Called inside the training loop"""
+        if self.checkpoint_freq > 0 and epoch % self.checkpoint_freq == 0:
+            self.save(model_state, optim_state, epoch, val_acc)
+
+    def save_final(self, model_state, optim_state, epoch, val_acc):
+        """Called after the training loop"""
+        # TODO: If train runs despite disabled checkpoint, with current implementation the final version of the model is saved. Is this a desired behaviour?
+        if self.last_saved != epoch:
+            self.save(model_state, optim_state, epoch, val_acc)
+
+    def save(self, model_state, optim_state, epoch, val_acc):
+        file_name = self.model_name + "_" + str(epoch) + ".pt" # TODO: Add id_suffix??
+        full_path = os.path.join(self.checkpoint_path, file_name)
+        # TODO: Except model_state, optim_state, epoch, val_acc, the rest of the entries are static during a run. We may save them once and reuse that file
+        torch.save({'model_args': self.model_args,
+                    'model_name': self.model_name,
+                    'solver_args': self.solver_args, # TODO: solver_args includes extra_args, there are many duplicate entries
+                    'solver_name': self.solver_name,
+                    'model_state': model_state,
+                    'optim_state': optim_state,
+                    'start_epoch': epoch,
+                    'max_val_acc': val_acc}, full_path)
+                    
+        print("Checkpoint {} is created".format(file_name))
+
+        self.last_saved = epoch
+        self.max_val_acc = val_acc # TODO: change after implementing acc-based saving mechanism
+
+    def load_checkpoint(self, path):
+        saved_info = torch.load(path)
+        # Reconstruct model from the skeleton
+        model_args = saved_info["model_args"]
+        model = NovelViewSynthesisModel(**model_args)
+
+        # Reconstruct solver from the skeleton
+        solver = None
+        if saved_info["solver_name"] == "NVS_Solver":
+            solver_args = saved_info["solver_args"]
+            losses = solver_args.pop("loss_func")
+            nvs_loss = SynthesisLoss(losses=losses)
+            solver = NVS_Solver(**solver_args, loss_func=nvs_loss, optim_state=saved_info["optim_state"])
+        else:
+            # TODO: Support for GAN_Wrapper_Solver
+            raise NotImplemented
+
+        # Load model state, optim state is automatically loaded by solver
+        model.load_state_dict(saved_info["model_state"])
+        start_epoch = saved_info["start_epoch"]
+        max_val_acc = saved_info["max_val_acc"]
+
+        # Overwrite checkpoint state (Frequency should be reassigned)
+        self.model_args = model_args
+        self.model_name = saved_info["model_name"]
+        self.solver_args = solver_args
+        self.solver_name = saved_info["solver_name"]
+        checkpoint_path = os.path.join(*path.split("/")[:-1])
+        self.checkpoint_path = checkpoint_path
+        self.max_val_acc = max_val_acc
+        self.last_saved = start_epoch
+        self.setup(start_epoch)
+
+        return model, solver, start_epoch
 
 class NVS_Solver(object):
     default_adam_args = {"lr": 1e-4,
@@ -79,13 +220,13 @@ class NVS_Solver(object):
 
     def __init__(self,
                  optim=torch.optim.Adam,
+                 optim_state=None,
                  optim_args={},
                  loss_func=None,
                  extra_args={},
                  tensorboard_writer=None,
                  log_dir=None):
         """
-
         Parameters
         ----------
         optim: which optimizer to use, e.g. Adam
@@ -98,8 +239,9 @@ class NVS_Solver(object):
         optim_args_merged.update(optim_args)
         self.optim_args = optim_args_merged
         self.optim = optim
+        self.optim_state = optim_state
         self.loss_func = loss_func if loss_func is not None else SynthesisLoss()
-        self.acc_func = QualityMetrics() # TODO: test it
+        self.acc_func = QualityMetrics()
         self.batch_loader = default_batch_loader
 
         self.writer = SummaryWriter(log_dir) if tensorboard_writer is None else tensorboard_writer
@@ -176,10 +318,9 @@ class NVS_Solver(object):
 
         self.writer.flush()
 
-    def visualize_output(self, output, take_slice=None, tag="image", step=0):
+    def visualize_output(self, output, take_slice=None, tag="image", step=0, depth=False):
         """
         Generic method for visualizing a single image or a whole batch
-
         Parameters
         ----------
         output: batch of data, containing input, target, prediction and depth image
@@ -188,17 +329,19 @@ class NVS_Solver(object):
         step: used for stamping epoch or iteration
         """
         # TODO: depth_batch is ignored for the moment, however, if needed, it can also be integrated later on
-        input_batch, target_batch, pred_batch, depth_batch = output["InputImg"].cpu(),\
-                                                             output["OutputImg"].cpu(),\
-                                                             output["PredImg"].cpu(),\
-                                                             output["PredDepth"].cpu()
+        input_batch, target_batch, pred_batch, depth_batch, input_depth = output["InputImg"].cpu(),\
+                                                                          output["OutputImg"].cpu(),\
+                                                                          output["PredImg"].cpu(),\
+                                                                          output["PredDepth"].cpu(),\
+                                                                          output['InputDepth'].cpu()
         with torch.no_grad():
             # In case of a single image add one dimension to the beginning to create single image batch
             if len(pred_batch.shape) == 3:
                 input_batch = input_batch.unsqueeze(0)
                 target_batch = target_batch.unsqueeze(0)
                 pred_batch = pred_batch.unsqueeze(0)
-            
+                depth_batch = depth_batch.unsqueeze(0)
+
             if len(pred_batch.shape) != 4:
                 print("Only 3D or 4D tensors can be visualized")
                 return
@@ -208,7 +351,8 @@ class NVS_Solver(object):
                 input_batch = input_batch[take_slice[0], take_slice[1]]
                 target_batch = target_batch[take_slice[0], take_slice[1]]
                 pred_batch = pred_batch[take_slice[0], take_slice[1]]
-                
+                depth_batch = depth_batch[take_slice[0], take_slice[1]]
+
             # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
             img_lst = torch.Tensor()
 
@@ -216,11 +360,29 @@ class NVS_Solver(object):
             for i in range(pred_batch.shape[0]):
                 # Each iteration pick input image and corresponding target & pred images
                 # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
-                # Order in img_list defines the layout. 
+                # Order in img_list defines the layout.
                 # Current layout: input - target - pred at each row
-                img_lst = torch.cat((img_lst, input_batch[i].unsqueeze(0), target_batch[i].unsqueeze(0), pred_batch[i].unsqueeze(0)), dim=0)
-            
-            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack 
+                img_lst = torch.cat((img_lst,
+                    input_batch[i].unsqueeze(0),
+                    target_batch[i].unsqueeze(0),
+                    pred_batch[i].unsqueeze(0)), dim=0)
+
+            if depth:
+                depth_lst = torch.Tensor()
+                depth_batch = (depth_batch-0)/(10-0)
+                input_depth = (input_depth-0)/(10-0)
+                for i in range(depth_batch.shape[0]):
+                    # Each iteration pick input image and corresponding target & pred images
+                    # As we index image from batch, we need to extend the dimension of indexed images with .unsqueeze(0) for vstack
+                    # Order in img_list defines the layout.
+                    # Current layout: input - target - pred at each row
+                    depth_lst = torch.cat((depth_lst,
+                        input_depth[i].unsqueeze(0),
+                        depth_batch[i].unsqueeze(0)), dim=0)
+                depth_grid = make_grid(depth_lst, nrow=2)
+                self.writer.add_image(tag+'/depth', depth_grid, global_step=step)
+
+            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack
             # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
@@ -278,6 +440,8 @@ class NVS_Solver(object):
               model,
               train_loader,
               val_loader,
+              checkpoint_handler,
+              start_epoch=0,
               num_epochs=10,
               log_nth_iter=1,
               log_nth_epoch=1,
@@ -285,7 +449,6 @@ class NVS_Solver(object):
               verbose=False):
         """
         Train a given model with the provided data.
-
         Inputs:
         :param model: nvs_model object initialized from nvs_model.py
         :param train_loader: train data in torch.utils.data.DataLoader
@@ -298,17 +461,25 @@ class NVS_Solver(object):
                 'epoch': tqdm for each epoch how long it will take,
                 anything else, e.g. None: do not use tqdm
         """
-        optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()), **self.optim_args)
-        self._reset_histories()
-        iter_per_epoch = len(train_loader)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model.to(device)
+        
+        # Use registered optimizer state if available (becomes available when loaded from checkpoint.)
+        if self.optim_state:
+            optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()))
+            optim.load_state_dict(self.optim_state)
+        else:
+            optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()), **self.optim_args)
+        
+        self._reset_histories()
+        iter_per_epoch = len(train_loader)
 
         print('START TRAIN on device: {}'.format(device))
 
-        epochs = range(num_epochs)
+        max_epoch = start_epoch + num_epochs
+        epochs = range(start_epoch, max_epoch)
         if tqdm_mode == 'total':
-            epochs = tqdm(range(num_epochs))
+            epochs = tqdm(range(start_epoch, max_epoch))
         for epoch in epochs:  # for every epoch...
             model.train()  # TRAINING mode (for dropout, batchnorm, etc.)
             train_losses = []
@@ -354,7 +525,7 @@ class NVS_Solver(object):
                 train_accs.append(train_acc)
 
                 # Print loss every log_nth iteration
-                if log_nth_iter != 0 and i % log_nth_iter == 0:
+                if log_nth_iter != 0 and (i+1) % log_nth_iter == 0:
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
@@ -376,12 +547,15 @@ class NVS_Solver(object):
             mean_train_loss = np.mean(train_losses)
             mean_train_acc = np.mean(train_accs)
 
-            if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+            if log_nth_epoch != 0 and (epoch+1) % log_nth_epoch == 0:
                 print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                     max=num_epochs,
+                                                                                     max=max_epoch,
                                                                                      acc=mean_train_acc,
                                                                                      loss=mean_train_loss))
-                self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
+                # If last iteration of the train epoch was not already logged
+                num_iter = len(train_minibatches)
+                if (log_nth_iter == 0) or (num_iter % log_nth_iter != 0):
+                    self.visualize_output(train_output, tag="train", step=epoch*iter_per_epoch + i)
 
             # ONE EPOCH PASSED --> calculate + log validation accuracy/loss for this epoch
             mean_val_loss = None
@@ -400,13 +574,13 @@ class NVS_Solver(object):
                         val_loss_dir, val_output, val_acc_dir = self.forward_pass(model, sample)
                         val_loss, val_acc = self.log_iteration_loss_and_acc(val_loss_dir,
                                                                             val_acc_dir,
-                                                                  'Val/',
+                                                                            'Val/',
                                                                             epoch * len(val_minibatches) + i)
                         val_losses.append(val_loss)
                         val_accs.append(val_acc)
 
                         # Print loss every log_nth iteration
-                        if log_nth_iter != 0 and i % log_nth_iter == 0:
+                        if log_nth_iter != 0 and (i+1) % log_nth_iter == 0:
                             print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                     max=len(val_loader),
                                                                                     loss=val_loss))
@@ -415,15 +589,24 @@ class NVS_Solver(object):
                     mean_val_loss = np.mean(val_losses)
                     mean_val_acc = np.mean(val_accs)
 
-                    if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                    if log_nth_epoch != 0 and (epoch+1) % log_nth_epoch == 0:
                         print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
-                                                                                           max=num_epochs,
+                                                                                           max=max_epoch,
                                                                                            acc=mean_val_acc,
                                                                                            loss=mean_val_loss))
-                        self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
+                        # If last iteration of the val epoch was not already logged
+                        num_iter = len(val_minibatches)
+                        if (log_nth_iter == 0) or (num_iter % log_nth_iter != 0):
+                            self.visualize_output(val_output, tag="val", step=epoch*len(val_minibatches) + i)
 
             # LOG EPOCH LOSS / ACC FOR TRAIN AND VAL IN TENSORBOARD
             self.log_epoch_loss_and_acc(mean_train_loss, mean_val_loss, mean_train_acc, mean_val_acc, epoch)
+
+            # Create a checkpoint
+            checkpoint_handler.save_checkpoint(model.state_dict(), optim.state_dict(), epoch+1, mean_val_acc)
+
+        # Save the final model (if not already saved)
+        checkpoint_handler.save_final(model.state_dict(), optim.state_dict(), epoch+1, mean_val_acc)
 
         self.writer.add_hparams(self.hparam_dict, {
             'HParam/Accuracy/Val': self.val_acc_history[-1] if len(val_loader) > 0 else 0,
