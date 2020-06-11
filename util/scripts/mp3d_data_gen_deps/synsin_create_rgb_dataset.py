@@ -94,10 +94,10 @@ class RandomImageGenerator(object):
 
         # print("gpu_id", gpu_id)
         resolution = opts.W
-        if opts.use_semantics:
-            sensors = ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]
-        else:
+        if opts.no_semantics:
             sensors = ["RGB_SENSOR", "DEPTH_SENSOR"]
+        else:
+            sensors = ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]
         if split == "train":
             data_path = opts.train_data_path
         elif split == "val":

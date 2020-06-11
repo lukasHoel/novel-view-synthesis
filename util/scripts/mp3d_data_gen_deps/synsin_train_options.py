@@ -148,7 +148,13 @@ class ArgumentParser:
         dataset_params = self.parser.add_argument_group("data")
         dataset_params.add_argument("--dataset", type=str, default="mp3d")
         dataset_params.add_argument(
-            "--use_semantics", action="store_true", default=True
+            "--no_txt_depth", action="store_true", default=False
+        )
+        dataset_params.add_argument(
+            "--no_binary_depth", action="store_true", default=False
+        )
+        dataset_params.add_argument(
+            "--no_semantics", action="store_true", default=False
         )
         dataset_params.add_argument(
             "--data_render_path",     # e.g. "./data/mp3d_dataset"

@@ -34,13 +34,16 @@ def split_RT(RT):
     cam_dir = np.array2string(cam_dir, formatter=formatter, max_line_width=np.inf, separator=", ")
     return cam_pos, cam_up, cam_dir
 
-def save_data(batch, folder, batch_idx): # TODO: extend it to n views, n is default 2, focusing on image pairs for now.
-    # Create subfolder using name of the scene
-    regex = r".*/(\w+)\.glb"
-    scene_path = batch["scene_path"][0]           # List of size sample_batch_size
-    scene = re.search(regex, scene_path).group(1)
-    full_path = os.path.join(folder, scene)
+def save_data(batch,
+              folder,
+              scene_id,
+              batch_idx,
+              use_txt_depth=True,
+              use_binary_depth=True, 
+              use_semantics=True):
 
+    # Create subfolder using ID of the scene
+    full_path = os.path.join(folder, scene_id)
     print("\nSaving under directory:", full_path)
     
     try:
@@ -48,16 +51,36 @@ def save_data(batch, folder, batch_idx): # TODO: extend it to n views, n is defa
     except FileExistsError:
         pass
 
-    img_batch0, img_batch1 = batch["images"]              # List of size n (different views)
-    depth_batch0, depth_batch1 = batch["depths"]          # List of size n (different views)
-    cam_batch0, cam_batch1 = batch["cameras"]             # List of size n (different views)
-    semantic_batch0, semantic_batch1 = batch["semantics"] # List of size n (different views)
+    # Each value in batch dict: List of size n (different views)
+    # NOTE: n is default 2, focusing on image pairs for now.
+    img_batch0, img_batch1 = batch["images"]
+    cam_batch0, cam_batch1 = batch["cameras"]
+    depth_batch0, depth_batch1 = batch["depths"] if use_txt_depth or use_binary_depth else (None, None)
+    semantic_batch0, semantic_batch1 = batch["semantics"] if use_semantics else (None, None)
     
-    file_prefix = os.path.join(full_path, scene)
+    file_prefix = os.path.join(full_path, scene_id)
     cam_file_content = "{:<12} = {}';\n"
     sample_batch_size = batch["images"][0].shape[0]
 
     start_idx = batch_idx * sample_batch_size
+    num_views = 2
+    exts = "png,txt"
+    files_per_view = 2
+
+    if use_semantics:
+        exts+=",semantic"
+        files_per_view += 1
+
+    if use_txt_depth:
+        exts+=",depth"
+        files_per_view += 1
+
+    if use_binary_depth:
+        exts+=",depth.npy"
+        files_per_view += 1
+
+    exts = "{" + exts + "}"
+    files_per_sample = num_views * files_per_view
 
     for sample_idx in range(sample_batch_size):
         curr_file_idx = str(start_idx + sample_idx)
@@ -68,14 +91,19 @@ def save_data(batch, folder, batch_idx): # TODO: extend it to n views, n is defa
         save_image(img0, template.format(pair_id=0, ext='png'))
         save_image(img1, template.format(pair_id=1, ext='png'))
 
-        # Save depth information (scene_idx_pairid.depth)
-        depth0, depth1 = depth_batch0[sample_idx].squeeze(0).cpu().numpy().ravel(),\
-                         depth_batch1[sample_idx].squeeze(0).cpu().numpy().ravel()
-        np.savetxt(template.format(pair_id=0, ext='depth'), depth0, fmt='%.5f', delimiter=' ', newline=' ')
-        np.savetxt(template.format(pair_id=1, ext='depth'), depth1, fmt='%.5f', delimiter=' ', newline=' ')
-        # TODO:
-        # np.save(template.format(pair_id=0, ext='depth.npy'), depth0)
-        # np.save(template.format(pair_id=1, ext='depth.npy'), depth1)
+        if use_txt_depth or use_binary_depth:
+            depth0, depth1 = depth_batch0[sample_idx].squeeze(0).cpu().numpy(),\
+                             depth_batch1[sample_idx].squeeze(0).cpu().numpy()
+
+            # Save depth information as text (scene_idx_pairid.depth)
+            if use_txt_depth:
+                np.savetxt(template.format(pair_id=0, ext='depth'), depth0.ravel(), fmt='%.5f', delimiter=' ', newline=' ')
+                np.savetxt(template.format(pair_id=1, ext='depth'), depth1.ravel(), fmt='%.5f', delimiter=' ', newline=' ')
+                
+            # Save depth information as binary file (scene_idx_pairid.depth.npy)
+            if use_binary_depth:
+                np.save(template.format(pair_id=0, ext='depth.npy'), depth0)
+                np.save(template.format(pair_id=1, ext='depth.npy'), depth1)
 
         # Save camera parameters (scene_idx_pairid.txt)
         # NOTE: According to SynSin implementation of get_camera_matrices (@camera_transformations.py):
@@ -105,14 +133,15 @@ def save_data(batch, folder, batch_idx): # TODO: extend it to n views, n is defa
             f.write(info)
 
         # Save semantics in the form of int IDs (scene_idx_pairid.semantic)
-        semantic0, semantic1 = semantic_batch0[sample_idx].squeeze(0).cpu().numpy().ravel(),\
-                               semantic_batch1[sample_idx].squeeze(0).cpu().numpy().ravel()
-        np.savetxt(template.format(pair_id=0, ext='semantic'), semantic0, fmt='%d', delimiter=' ', newline=' ')
-        np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1, fmt='%d', delimiter=' ', newline=' ')
+        if use_semantics:
+            semantic0, semantic1 = semantic_batch0[sample_idx].squeeze(0).cpu().numpy().ravel(),\
+                                   semantic_batch1[sample_idx].squeeze(0).cpu().numpy().ravel()
+            np.savetxt(template.format(pair_id=0, ext='semantic'), semantic0, fmt='%d', delimiter=' ', newline=' ')
+            np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1, fmt='%d', delimiter=' ', newline=' ')
 
-        print("Files created: {}_{}_{{0,1}}.{{png,depth,txt,semantic}}".format(scene, curr_file_idx))
+        print("Files created: {}_{}_{{0,1}}.{}".format(scene_id, curr_file_idx, exts))
 
-    print("Saving completed. Total number of files under {}: {}\n".format(full_path, 8*sample_batch_size))
+    print("Saving completed. Number of files created under {}: {}\n".format(full_path, files_per_sample * sample_batch_size))
 
 
 if __name__ == "__main__":
@@ -141,7 +170,9 @@ if __name__ == "__main__":
         # --data_render_path path_to_dataset_to_be_generated (required, e.g. "./data/mp3d_dataset")
         # --habitat_api_prefix path_to_habitat-api (required, e.g. "'path_prefix' part of path_prefix/habitat-api")
       # Flags that can stay the same:
-        # --use_semantics True (default: True)
+        # --no_txt_depth (default: False)
+        # --no_binary_depth (default: False)
+        # --no_semantics (default: False)
         # --num_workers 1 (default: 1)
         # --render_ids 0 (default: [0])
         # --gpu_ids 0 (default: 0)
@@ -175,16 +206,20 @@ if __name__ == "__main__":
     except FileExistsError:
         pass
 
+    use_txt_depth = not opts.no_txt_depth
+    use_binary_depth = not opts.no_binary_depth
+    use_semantics = not opts.no_semantics
+
     try:
         for scene_idx in range(opts.max_runs):
             batch_iter = iter(train_data_loader)
 
             for batch_idx in range(opts.sample_batch_count):
                 batch = next(batch_iter)
-                save_data(batch, dataset_path, batch_idx)
+                scene_id = batch["scene_path"][0].split("/")[-2]
+                save_data(batch, dataset_path, scene_id, batch_idx, use_txt_depth, use_binary_depth, use_semantics)
 
                 # Keep track of processed envs
-                scene_id = batch["scene_path"][0].split("/")[-2]
                 envs_processed.append(scene_id)
 
     except AssertionError:
