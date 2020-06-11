@@ -13,6 +13,7 @@ class NovelViewSynthesisModel(nn.Module):
                  # depth
                  max_z=10,
                  min_z=0,
+                 num_filters=32,
 
                  #enc
                  enc_dims=[3, 8, 16, 32],
@@ -49,6 +50,7 @@ class NovelViewSynthesisModel(nn.Module):
         # for depth regressor
         self.max_z = max_z
         self.min_z = min_z
+        self.num_filters = num_filters
 
         # for enc/dec
         self.enc_dims = enc_dims
@@ -86,7 +88,7 @@ class NovelViewSynthesisModel(nn.Module):
 
         # POINT CLOUD TRANSFORMER
         # REGRESS 3D POINTS
-        self.pts_regressor = Unet(num_filters=32, channels_in=3, channels_out=1)
+        self.pts_regressor = Unet(num_filters=self.num_filters, channels_in=3, channels_out=1)
 
         # TODO is this the class that takes care of ambiguous depth after reprojection?
         '''
