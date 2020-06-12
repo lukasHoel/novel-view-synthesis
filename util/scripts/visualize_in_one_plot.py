@@ -5,7 +5,7 @@ import sys
 if __name__ == "__main__":
 
     if len(sys.argv) != 3:
-        print("Usage: " + sys.argv[0] + " <path_to_train.csv> <path_to_val.csv>")
+        raise ValueError("Usage: " + sys.argv[0] + " <path_to_train.csv> <path_to_val.csv>")
 
     train = csv.reader(open(sys.argv[1]))
     next(train, None) # skip header
