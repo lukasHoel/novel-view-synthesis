@@ -38,9 +38,12 @@ def save_data(batch,
               folder,
               scene_id,
               batch_idx,
-              use_txt_depth=True,
-              use_binary_depth=True, 
-              use_semantics=True):
+              save_images, 
+              save_txt_depth, 
+              save_binary_depth, 
+              save_cam, 
+              save_txt_semantics,
+              save_binary_semantics):
 
     # Create subfolder using ID of the scene
     full_path = os.path.join(folder, scene_id)
@@ -53,10 +56,10 @@ def save_data(batch,
 
     # Each value in batch dict: List of size n (different views)
     # NOTE: n is default 2, focusing on image pairs for now.
-    img_batch0, img_batch1 = batch["images"]
-    cam_batch0, cam_batch1 = batch["cameras"]
-    depth_batch0, depth_batch1 = batch["depths"] if use_txt_depth or use_binary_depth else (None, None)
-    semantic_batch0, semantic_batch1 = batch["semantics"] if use_semantics else (None, None)
+    img_batch0, img_batch1 = batch["images"] if save_images else (None, None)
+    depth_batch0, depth_batch1 = batch["depths"] if save_txt_depth or save_binary_depth else (None, None)
+    cam_batch0, cam_batch1 = batch["cameras"] if save_cam else (None, None)
+    semantic_batch0, semantic_batch1 = batch["semantics"] if save_txt_semantics or save_binary_semantics else (None, None)
     
     file_prefix = os.path.join(full_path, scene_id)
     cam_file_content = "{:<12} = {}';\n"
@@ -64,80 +67,97 @@ def save_data(batch,
 
     start_idx = batch_idx * sample_batch_size
     num_views = 2
-    exts = "png,txt"
-    files_per_view = 2
+    exts = []
 
-    if use_semantics:
-        exts+=",semantic"
-        files_per_view += 1
+    if save_images:
+        exts.append("png")
 
-    if use_txt_depth:
-        exts+=",depth"
-        files_per_view += 1
+    if save_txt_depth:
+        exts.append("depth")
 
-    if use_binary_depth:
-        exts+=",depth.npy"
-        files_per_view += 1
+    if save_binary_depth:
+        exts.append("depth.npy")
 
-    exts = "{" + exts + "}"
+    if save_cam:
+        exts.append("txt")
+
+    if save_txt_semantics:
+        exts.append("semantic")
+
+    if save_binary_semantics:
+        exts.append("semantic.npy")
+
+    files_per_view = len(exts)
     files_per_sample = num_views * files_per_view
+    exts = "{" + ",".join(exts) + "}"
 
     for sample_idx in range(sample_batch_size):
         curr_file_idx = str(start_idx + sample_idx)
         template = file_prefix + "_" + curr_file_idx + "_{pair_id}.{ext}"
         
         # Save RGB images (scene_idx_pairid.png)
-        img0, img1 = img_batch0[sample_idx].cpu(), img_batch1[sample_idx].cpu()
-        save_image(img0, template.format(pair_id=0, ext='png'))
-        save_image(img1, template.format(pair_id=1, ext='png'))
+        if save_images:
+            img0, img1 = img_batch0[sample_idx].cpu(), img_batch1[sample_idx].cpu()
+            save_image(img0, template.format(pair_id=0, ext='png'))
+            save_image(img1, template.format(pair_id=1, ext='png'))
 
-        if use_txt_depth or use_binary_depth:
+        # Save depth information
+        if save_txt_depth or save_binary_depth:
             depth0, depth1 = depth_batch0[sample_idx].squeeze(0).cpu().numpy(),\
                              depth_batch1[sample_idx].squeeze(0).cpu().numpy()
 
-            # Save depth information as text (scene_idx_pairid.depth)
-            if use_txt_depth:
+            # Save depth information as text file (scene_idx_pairid.depth)
+            if save_txt_depth:
                 np.savetxt(template.format(pair_id=0, ext='depth'), depth0.ravel(), fmt='%.5f', delimiter=' ', newline=' ')
                 np.savetxt(template.format(pair_id=1, ext='depth'), depth1.ravel(), fmt='%.5f', delimiter=' ', newline=' ')
                 
             # Save depth information as binary file (scene_idx_pairid.depth.npy)
-            if use_binary_depth:
+            if save_binary_depth:
                 np.save(template.format(pair_id=0, ext='depth.npy'), depth0)
                 np.save(template.format(pair_id=1, ext='depth.npy'), depth1)
 
         # Save camera parameters (scene_idx_pairid.txt)
         # NOTE: According to SynSin implementation of get_camera_matrices (@camera_transformations.py):
         # P: World->Cam, Pinv: Cam->World
-        P0, K0, Pinv0, Kinv0 = cam_batch0["P"][sample_idx],\
-                               cam_batch0["K"][sample_idx],\
-                               cam_batch0["Pinv"][sample_idx],\
-                               cam_batch0["Kinv"][sample_idx]
+        if save_cam:
+            P0, K0, Pinv0, Kinv0 = cam_batch0["P"][sample_idx],\
+                                   cam_batch0["K"][sample_idx],\
+                                   cam_batch0["Pinv"][sample_idx],\
+                                   cam_batch0["Kinv"][sample_idx]
 
-        cam_pos, cam_up, cam_dir = split_RT(Pinv0.cpu().numpy())
-        info = cam_file_content.format("cam_pos", cam_pos)
-        info += cam_file_content.format("cam_dir", cam_dir)
-        info += cam_file_content.format("cam_up", cam_up)
-        with open(template.format(pair_id=0, ext='txt'), 'w+') as f:
-            f.write(info)
+            cam_pos, cam_up, cam_dir = split_RT(Pinv0.cpu().numpy())
+            info = cam_file_content.format("cam_pos", cam_pos)
+            info += cam_file_content.format("cam_dir", cam_dir)
+            info += cam_file_content.format("cam_up", cam_up)
+            with open(template.format(pair_id=0, ext='txt'), 'w+') as f:
+                f.write(info)
 
-        P1, K1, Pinv1, Kinv1 = cam_batch1["P"][sample_idx],\
-                               cam_batch1["K"][sample_idx],\
-                               cam_batch1["Pinv"][sample_idx],\
-                               cam_batch1["Kinv"][sample_idx]
+            P1, K1, Pinv1, Kinv1 = cam_batch1["P"][sample_idx],\
+                                   cam_batch1["K"][sample_idx],\
+                                   cam_batch1["Pinv"][sample_idx],\
+                                   cam_batch1["Kinv"][sample_idx]
 
-        cam_pos, cam_up, cam_dir = split_RT(Pinv1.cpu().numpy())
-        info = cam_file_content.format("cam_pos", cam_pos)
-        info += cam_file_content.format("cam_dir", cam_dir)
-        info += cam_file_content.format("cam_up", cam_up)
-        with open(template.format(pair_id=1, ext='txt'), 'w+') as f:
-            f.write(info)
+            cam_pos, cam_up, cam_dir = split_RT(Pinv1.cpu().numpy())
+            info = cam_file_content.format("cam_pos", cam_pos)
+            info += cam_file_content.format("cam_dir", cam_dir)
+            info += cam_file_content.format("cam_up", cam_up)
+            with open(template.format(pair_id=1, ext='txt'), 'w+') as f:
+                f.write(info)
 
-        # Save semantics in the form of int IDs (scene_idx_pairid.semantic)
-        if use_semantics:
-            semantic0, semantic1 = semantic_batch0[sample_idx].squeeze(0).cpu().numpy().ravel(),\
-                                   semantic_batch1[sample_idx].squeeze(0).cpu().numpy().ravel()
-            np.savetxt(template.format(pair_id=0, ext='semantic'), semantic0, fmt='%d', delimiter=' ', newline=' ')
-            np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1, fmt='%d', delimiter=' ', newline=' ')
+        # Save semantic information in the form of int IDs
+        if save_txt_semantics or save_binary_semantics:
+            semantic0, semantic1 = semantic_batch0[sample_idx].squeeze(0).cpu().numpy(),\
+                                   semantic_batch1[sample_idx].squeeze(0).cpu().numpy()
+
+            # Save semantic information as text file (scene_idx_pairid.semantic)
+            if save_txt_semantics:
+                np.savetxt(template.format(pair_id=0, ext='semantic'), semantic0.ravel(), fmt='%d', delimiter=' ', newline=' ')
+                np.savetxt(template.format(pair_id=1, ext='semantic'), semantic1.ravel(), fmt='%d', delimiter=' ', newline=' ')
+
+            # Save semantic information as binary file (scene_idx_pairid.semantic.npy)
+            if save_binary_semantics:
+                np.save(template.format(pair_id=0, ext='semantic.npy'), semantic0)
+                np.save(template.format(pair_id=1, ext='semantic.npy'), semantic1)
 
         print("Files created: {}_{}_{{0,1}}.{}".format(scene_id, curr_file_idx, exts))
 
@@ -170,9 +190,12 @@ if __name__ == "__main__":
         # --data_render_path path_to_dataset_to_be_generated (required, e.g. "./data/mp3d_dataset")
         # --habitat_api_prefix path_to_habitat-api (required, e.g. "'path_prefix' part of path_prefix/habitat-api")
       # Flags that can stay the same:
+        # --no_image (default: False)
         # --no_txt_depth (default: False)
         # --no_binary_depth (default: False)
-        # --no_semantics (default: False)
+        # --no_cam (default: False)
+        # --no_txt_semantic (default: False)
+        # --no_binary_semantic (default: False)
         # --num_workers 1 (default: 1)
         # --render_ids 0 (default: [0])
         # --gpu_ids 0 (default: 0)
@@ -206,9 +229,12 @@ if __name__ == "__main__":
     except FileExistsError:
         pass
 
-    use_txt_depth = not opts.no_txt_depth
-    use_binary_depth = not opts.no_binary_depth
-    use_semantics = not opts.no_semantics
+    save_images = not opts.no_image
+    save_txt_depth = not opts.no_txt_depth
+    save_binary_depth = not opts.no_binary_depth
+    save_cam = not opts.no_cam
+    save_txt_semantics = not opts.no_txt_semantic
+    save_binary_semantics = not opts.no_binary_semantic
 
     try:
         for scene_idx in range(opts.max_runs):
@@ -217,7 +243,8 @@ if __name__ == "__main__":
             for batch_idx in range(opts.sample_batch_count):
                 batch = next(batch_iter)
                 scene_id = batch["scene_path"][0].split("/")[-2]
-                save_data(batch, dataset_path, scene_id, batch_idx, use_txt_depth, use_binary_depth, use_semantics)
+                save_data(batch, dataset_path, scene_id, batch_idx, 
+                          save_images, save_txt_depth, save_binary_depth, save_cam, save_txt_semantics, save_binary_semantics)
 
                 # Keep track of processed envs
                 envs_processed.append(scene_id)
