@@ -13,6 +13,8 @@
 #include "model.h"
 #include "camera.h"
 
+#include "icl_parser.h"
+
 const unsigned int DEF_WIDTH = 1280;
 const unsigned int DEF_HEIGHT = 1024;
 
@@ -23,7 +25,7 @@ class Renderer {
 public:
     Renderer(string const &pathToMesh, int width, int height);
     ~Renderer();
-    void renderInteractive();
+    void renderInteractive(ICL_Parser &ip);
     int init();
 
     void readRGB(cv::Mat& image);

@@ -11,10 +11,10 @@ namespace camera_utils {
 glm::mat4 perspective(glm::mat3& intrinsics, int width, int height, double n, double f) {
     assert(f > n);
 
-    std::cout << "fx: " << intrinsics[0][0] << std::endl;
-    std::cout << "fy: " << intrinsics[1][1] << std::endl;
-    std::cout << "cx: " << intrinsics[0][2] << std::endl;
-    std::cout << "cy: " << intrinsics[1][2] << std::endl;
+    // std::cout << "fx: " << intrinsics[0][0] << std::endl;
+    // std::cout << "fy: " << intrinsics[1][1] << std::endl;
+    // std::cout << "cx: " << intrinsics[0][2] << std::endl;
+    // std::cout << "cy: " << intrinsics[1][2] << std::endl;
 
     glm::mat4 res(2 * intrinsics[0][0] / width, 0, -(2*(intrinsics[0][2] / width) -1), 0,
                   0, 2 * intrinsics[1][1] / height, -(2*(intrinsics[1][2] / height) -1), 0,

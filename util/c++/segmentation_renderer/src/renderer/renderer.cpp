@@ -1,5 +1,10 @@
 #include "renderer.h"
 #include "model.h"
+// #include "util.h"
+
+// basic file operations
+#include <iostream>
+#include <fstream>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter);
@@ -7,9 +12,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 bool takeScreenshot = false;
+bool spacePressedAtLeastOnce = false;
 
 // camera
-Camera camera(glm::vec3(0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f
+Camera camera(glm::vec3(0.0f, 0.0f, 0.0f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f    0.790932f, 1.300000f, 1.462270f
 float lastX = DEF_WIDTH / 2.0f;
 float lastY = DEF_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -117,7 +123,7 @@ void Renderer::readRGB(cv::Mat& image) {
     // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
 }
 
-void Renderer::renderInteractive(){
+void Renderer::renderInteractive(ICL_Parser &ip){
     // render loop
     int imgCounter = 0;
     while (!glfwWindowShouldClose(m_window))
@@ -136,9 +142,26 @@ void Renderer::renderInteractive(){
         // model/view/projection transformations
         // ------
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)m_buffer_width / (float)m_buffer_height, 0.1f, 100.0f);
+        glm::mat3 intr = ip.getIntrinsics();
+        // glm::mat4 projection = camera_utils::perspective(intr, ip.getWidth(), ip.getHeight(), kNearPlane, kFarPlane);
+
         glm::mat4 view = camera.GetViewMatrix();
+        // view = glm::translate(view, glm::vec3(1.3705f, 1.51739f, 1.44963f)); // 0.790932, 1.300000, 1.462270         1.3705f, 1.51739f, 1.44963f
+
         glm::mat4 model = glm::mat4(1.0f);
 
+        model = glm::scale(model, glm::vec3(1, -1, 1));
+        model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
+        // model = glm::translate(model, glm::vec3(2.75f, 0.0f, 0.0f));
+        // model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+
+        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.5f));
+        // model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        // model = glm::scale(model, glm::vec3(-1, 1, 1));
+
+
+        // std::cout << "MODEL: " << glm::to_string(model) << std::endl;
+        
         //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
         //model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
 
@@ -175,13 +198,34 @@ void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter)
 
         // save matrix as file
         if (!colorImage.empty()) {
-            std::stringstream filename;
-            char scene_name[30];
-            sprintf(scene_name, "screenshot_%04d.jpg", (*imgCounter)++);
-            filename << scene_name;
-            cv::imwrite(filename.str(), colorImage);
+            std::stringstream image_filename;
+            char image_name[30];
+            sprintf(image_name, "scene_00_%04d.png", *imgCounter);
+            image_filename << image_name;
+            cv::imwrite(image_filename.str(), colorImage);
 
-            std::cout << "Wrote screenshot: " << scene_name << std::endl;
+            std::cout << "Wrote image: " << image_name << std::endl;
+
+
+            // write cam matrix
+            std::stringstream cam_filename;
+            char cam_name[30];
+            sprintf(cam_name, "scene_00_%04d.txt", *imgCounter);
+            cam_filename << cam_name;
+
+            glm::mat4 view = camera.GetViewMatrix();
+
+            ofstream cam_file;
+            cam_file.open (cam_filename.str());
+            cam_file << "cam_pos\t= [" << view[3][0] << ", " << view[3][1] << ", " << view[3][2] << "]';\n";
+            cam_file << "cam_dir\t= [" << view[2][0] << ", " << view[2][1] << ", " << view[2][2] << "]';\n";
+            cam_file << "cam_up\t= [" << view[1][0] << ", " << view[1][1] << ", " << view[1][2] << "]';\n";
+            cam_file.close();
+
+            std::cout << "Wrote cam: " << cam_name << std::endl;
+
+            // increment
+            (*imgCounter)++;
         }
 
         takeScreenshot = false;
@@ -190,8 +234,16 @@ void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter)
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS){
+    if ( (key == GLFW_KEY_SPACE && action == GLFW_PRESS) 
+       ||(key == GLFW_KEY_W && spacePressedAtLeastOnce && action == GLFW_PRESS)
+       ||(key == GLFW_KEY_A && spacePressedAtLeastOnce && action == GLFW_PRESS)
+       ||(key == GLFW_KEY_S && spacePressedAtLeastOnce && action == GLFW_PRESS)
+       ||(key == GLFW_KEY_D && spacePressedAtLeastOnce && action == GLFW_PRESS)){
         takeScreenshot = true;
+    }
+
+    if (! spacePressedAtLeastOnce && key == GLFW_KEY_SPACE && action == GLFW_PRESS){
+        spacePressedAtLeastOnce = true;
     }
 }
 

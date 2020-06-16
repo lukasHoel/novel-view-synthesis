@@ -29,24 +29,25 @@
 
 int main(int argc, char** argv){
 
-    ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop", 0);
+    // ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop", 0);
+    ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001/original", 0);
 
     ICL_Renderer icl_renderer("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
 
     ICL_Segmentation_Provider icl_sp("../src/icl_nuim/object_to_color.txt");
 
     glm::mat4 t(1.0f);
-    t = glm::translate(t, glm::vec3(0.3f, 0.3f, 0.3f));
+    t = glm::translate(t, glm::vec3(0.5f, 0.0f, 0.3f));
 
     for(auto& mesh : icl_renderer.m_model->meshes){
         icl_sp.change_colors(mesh);
         ICL_Mesh_Transformer icl_mt(mesh);
-        //icl_mt.moveVerticesOfObject("chair1_seat_chair1_seat", t);
+        icl_mt.moveVerticesOfObject("table_board_table_board", t);
     }
 
     //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
-    icl_renderer.renderInteractive();
-    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop/seg");
+    // icl_renderer.renderInteractive(ip);
+    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001/moved");
 
     /*
     if(argc != 3){
