@@ -240,14 +240,15 @@ if __name__ == "__main__":
         for scene_idx in range(opts.max_runs):
             batch_iter = iter(train_data_loader)
 
+            scene_id = None
             for batch_idx in range(opts.sample_batch_count):
                 batch = next(batch_iter)
                 scene_id = batch["scene_path"][0].split("/")[-2]
                 save_data(batch, dataset_path, scene_id, batch_idx, 
                           save_images, save_txt_depth, save_binary_depth, save_cam, save_txt_semantics, save_binary_semantics)
 
-                # Keep track of processed envs
-                envs_processed.append(scene_id)
+            # Update the list once processing the env is completed
+            envs_processed.append(scene_id)
 
     except AssertionError:
         print("No more envs to process")
