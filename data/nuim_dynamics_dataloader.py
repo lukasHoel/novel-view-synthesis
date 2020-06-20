@@ -1,7 +1,6 @@
 from util.camera_transformations import *
 import torchvision
 
-from data.disk_dataloader import DiskDataset
 from data.nuim_dataloader import ICLNUIMDataset
 import os
 import json
@@ -102,7 +101,7 @@ def test():
 
     dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001",
                              sampleOutput=True,
-                             output_from_other_view=False,
+                             output_from_other_view=True,
                              inverse_depth=False,
                              cacheItems=False,
                              transform=transform)
@@ -116,6 +115,7 @@ def test():
 
     print(item["image"].shape)
     print(item["dynamics"]["mask"].shape)
+    print(item["dynamics"]["transformation"])
 
     print("RT1:\n{}". format(item['cam']['RT1']))
     print("RT1 euler angles in radians: {}".format(getEulerAngles(item['cam']['RT1'])))

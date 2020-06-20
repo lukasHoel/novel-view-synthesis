@@ -145,7 +145,7 @@ class DiskDataset(Dataset, ABC):
         if self.dynamics is not None:
             transformation = self.dynamics["transformation"]
             transformation = np.asarray(transformation).reshape((3,4))
-            transformation = np.vstack([transformation, [0, 0, 0, 1]])
+            transformation = np.vstack([transformation, [0, 0, 0, 1]]).astype(np.float32)
 
             color = self.dynamics["color"]
             color = np.asarray(color)
@@ -156,7 +156,7 @@ class DiskDataset(Dataset, ABC):
             mask = Image.fromarray(mask)
 
             if self.transform:
-                mask = self.transform(mask).int()
+                mask = self.transform(mask).bool()
                 if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
                     transformation = torchvision.transforms.ToTensor()(transformation)
 
