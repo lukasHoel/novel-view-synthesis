@@ -96,13 +96,13 @@ def test():
     size = 256
 
     transform = torchvision.transforms.Compose([
-        #torchvision.transforms.Resize((size, size)),
+        torchvision.transforms.Resize((size, size)),
         torchvision.transforms.ToTensor(),
     ])
 
     dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001",
                              sampleOutput=True,
-                             output_from_other_view=True,
+                             output_from_other_view=False,
                              inverse_depth=False,
                              cacheItems=False,
                              transform=transform)
@@ -134,22 +134,27 @@ def test():
     import matplotlib.pyplot as plt
     fig = plt.figure(figsize=item['image'].shape[1:])
     fig.suptitle("Sample " + str(i), fontsize=16)
+
     img = np.moveaxis(item['image'].numpy(), 0, -1)
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
     out_idx = item['output']['idx']
     depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
+
     fig.add_subplot(1, 4, 1)
     plt.title("Image")
     plt.imshow(img)
+
     fig.add_subplot(1, 4, 2)
     plt.title("Output Image " + str(out_idx))
     plt.imshow(out_img)
+
     fig.add_subplot(1, 4, 3)
     plt.title("Mask dynamics")
     img[:,:] = np.array([0, 0, 0])
     mask = np.moveaxis(item["dynamics"]["mask"].numpy(), 0, -1).squeeze()
-    img[mask] = np.array([1, 1, 1])
+    img[mask == 1] = np.array([1, 1, 1])
     plt.imshow(img)
+
     fig.add_subplot(1, 4, 4)
     plt.title("Input Depth Map")
     plt.imshow(depth, cmap='gray')

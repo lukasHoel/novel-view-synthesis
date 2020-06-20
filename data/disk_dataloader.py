@@ -153,9 +153,10 @@ class DiskDataset(Dataset, ABC):
 
             mask = np.isclose(image, color)
             mask = mask[:,:,0] & mask[:,:,1] & mask[:,:,2]
+            mask = Image.fromarray(mask)
 
             if self.transform:
-                mask = self.transform(mask)
+                mask = self.transform(mask).int()
                 if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
                     transformation = torchvision.transforms.ToTensor()(transformation)
 
