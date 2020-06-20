@@ -120,11 +120,12 @@ class ICLNUIMDataset(DiskDataset):
     def load_data(self, dir_content):
         img = sorted([f for f in dir_content if f.endswith('.png')])
         depth = sorted([f for f in dir_content if f.endswith('.depth')])
+        has_depth = len(depth) > 0
         depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy')])
         has_binary_depth = len(depth_binary) > 0
         cam = sorted([f for f in dir_content if f.endswith('.txt')])
 
-        return img, depth, depth_binary, has_binary_depth, cam, len(img)
+        return img, depth, has_depth, depth_binary, has_binary_depth, cam, len(img), None
 
 
 def getEulerAngles(R):
