@@ -119,7 +119,7 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
             std::stringstream filename;
             char scene_name[30];
             sprintf(scene_name, "scene_%02d_%04d", ip.getSceneNr(), i);
-            filename << save_path << "/" << scene_name << ".png";
+            filename << save_path << "/" << scene_name << ".depth.png";
             cv::imwrite(filename.str(), colorImage);
 
             std::cout << "Wrote segmentation of: " << scene_name << std::endl;

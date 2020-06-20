@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument('--width', metavar='N', type=int, required=False, default=640,
                         help='image width')
     parser.add_argument('--height', metavar='N', type=int, required=False, default=480,
-                        help='image width')
+                        help='image height')
 
     args = parser.parse_args()
     main(input=args.input,
