@@ -27,7 +27,8 @@ class PtsManipulator(nn.Module):
 
     matterport_mode = 'mp3d'
     icl_nuim_mode = 'icl'
-    modes = [matterport_mode, icl_nuim_mode]
+    icl_nuim_dynamic_mode = 'icl_dynamic'
+    modes = [matterport_mode, icl_nuim_mode, icl_nuim_dynamic_mode]
 
     def __init__(self,
                  mode='mp3d',
@@ -59,7 +60,7 @@ class PtsManipulator(nn.Module):
             accumulation_tau=accumulation_tau
         )
 
-        if mode == PtsManipulator.icl_nuim_mode:
+        if mode == PtsManipulator.icl_nuim_mode or mode == PtsManipulator.icl_nuim_dynamic_mode:
             self.img_shape = (H, W)
 
             # create coordinate system for x and y
@@ -88,8 +89,12 @@ class PtsManipulator(nn.Module):
         self.register_buffer("xyzs", xyzs)
 
     def project_pts(
-            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics
     ):
+
+        if self.mode == PtsManipulator.icl_nuim_dynamic_mode:
+            pts3D *= 10.0 # TODO temporary because we have the depth divided by far plane in the c++ renderer!!
+
         # add Zs to the coordinate system
         # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image
         projected_coors = self.xyzs * pts3D
@@ -100,6 +105,17 @@ class PtsManipulator(nn.Module):
 
         # Transform to World Coordinates with RT of input view
         wrld_X = RT_cam1.bmm(cam1_X)
+
+        # Add dynamic changes if available
+        if dynamics is not None:
+            transformation = dynamics["transformation"] # retrieve dynamic transformation from data
+
+            if self.mode == PtsManipulator.icl_nuim_dynamic_mode:
+                transformation[:, 0, 3] *= -1 # this is needed because we used this custom world coordinate frame (see c++ renderer)
+                # transformation[:, 2,3] *= -1
+
+            mask = dynamics["mask"].view(-1) # retrieve mask from data
+            wrld_X[:, :, mask] = transformation.matmul(wrld_X[:, :, mask]) # apply transformation to all masked points in the point cloud
 
         # Transform from World coordinates to camera of output view
         new_coors = RTinv_cam2.bmm(wrld_X)
@@ -112,8 +128,8 @@ class PtsManipulator(nn.Module):
         zs = xy_proj[:, 2:3, :]
         zs[mask] = EPS
 
-        if self.mode == PtsManipulator.icl_nuim_mode:
-            # here we concatenate (x,y) / -z and the original z-coordinate into a new (x,y,z) vector
+        if self.mode == PtsManipulator.icl_nuim_mode or self.mode == PtsManipulator.icl_nuim_dynamic_mode:
+            # here we concatenate (x,y) / z and the original z-coordinate into a new (x,y,z) vector
             sampler = torch.cat((xy_proj[:, 0:2, :] / zs, xy_proj[:, 2:3, :]), 1)
 
             # rescale coordinates to work with splatting and move to origin
@@ -134,7 +150,7 @@ class PtsManipulator(nn.Module):
         return sampler
 
     def forward_justpts(
-            self, src, pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            self, src, pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics=None
     ):
         # Now project these points into a new view
         bs, c, w, h = src.size()
@@ -145,7 +161,7 @@ class PtsManipulator(nn.Module):
             src = src.view(bs, c, -1)
 
         pts3D = self.project_pts(
-            pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics
         )
         pointcloud = pts3D.permute(0, 2, 1).contiguous()
         result = self.splatter(pointcloud, src)

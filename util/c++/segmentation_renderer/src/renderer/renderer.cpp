@@ -96,6 +96,17 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
     GLuint framebuffername = 1;
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffername);
 
+
+
+    // The depth buffer
+	// GLuint depthrenderbuffer;
+	// glGenRenderbuffers(1, &depthrenderbuffer);
+	// glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
+	// glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, m_buffer_width, m_buffer_height);
+	// glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
+
+
+
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

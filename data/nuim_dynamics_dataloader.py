@@ -79,8 +79,8 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
             # return moved image with idx + 1, so from the next camera (except for last image, here return idx - 1 moved image)
             return [idx + self.size + 1 if idx < self.size - 1 else idx + self.size - 1 for idx in range(self.size)]
 
-    def modify_depth(self, depth):
-        return depth # nothing to do here because we expect the dynamic images to be rendered by our custom renderer which produces already the correct depth values
+    #def modify_depth(self, depth):
+        #return depth # nothing to do here because we expect the dynamic images to be rendered by our custom renderer which produces already the correct depth values
 
 def getEulerAngles(R):
     ry = np.arcsin(R[0,2])
@@ -95,7 +95,7 @@ def test():
     size = 256
 
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((size, size)),
+        #torchvision.transforms.Resize((size, size)),
         torchvision.transforms.ToTensor(),
     ])
 
@@ -138,7 +138,10 @@ def test():
     img = np.moveaxis(item['image'].numpy(), 0, -1)
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
     out_idx = item['output']['idx']
+
     depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
+    print("MIN DEPTH", np.min(depth))
+    print("MAX DEPTH", np.max(depth))
 
     fig.add_subplot(1, 4, 1)
     plt.title("Image")
@@ -159,6 +162,22 @@ def test():
     plt.title("Input Depth Map")
     plt.imshow(depth, cmap='gray')
     plt.show()
+
+    min_depth = -1
+    max_depth = -1
+    max_i = -1
+    for i, item in enumerate(dataset):
+        depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
+        min_d = np.min(depth)
+        max_d = np.max(depth)
+        if min_depth == -1 or min_d < min_depth:
+            min_depth = min_d
+        if max_depth == -1 or max_d > max_depth:
+            max_depth = max_d
+            max_i = i
+    print("MIN DEPTH", min_depth)
+    print("MAX DEPTH", max_depth)
+    print("MAX INDEX", max_i)
 
 if __name__ == "__main__":
     # execute only if run as a script

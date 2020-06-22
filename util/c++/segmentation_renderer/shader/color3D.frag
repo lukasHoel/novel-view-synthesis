@@ -18,9 +18,9 @@ float LinearizeDepth(float depth)
 void main( )
 {
     // USE THIS TO DRAW THE REAL COLORS TO IMAGE
-    // color = vec4(colorV, 1.0);
+    color = vec4(colorV, 1.0);
 
     // USE THIS TO DRAW THE LINEARIZED DEPTH TO IMAGE
-    float depth = LinearizeDepth(gl_FragCoord.z) / far; // divide by far for demonstration
-    color = vec4(vec3(depth), 1.0);
+    // float depth = LinearizeDepth(gl_FragCoord.z) / far; // divide by far for demonstration
+    // color = vec4(vec3(depth), 1.0);
 }

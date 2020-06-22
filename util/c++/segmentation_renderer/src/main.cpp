@@ -39,15 +39,17 @@ int main(int argc, char** argv){
     glm::mat4 t(1.0f);
     t = glm::translate(t, glm::vec3(0.5f, 0.0f, 0.3f));
 
+    std::cout << glm::to_string(t) << std::endl;
+
     for(auto& mesh : icl_renderer.m_model->meshes){
         icl_sp.change_colors(mesh);
         ICL_Mesh_Transformer icl_mt(mesh);
-        // icl_mt.moveVerticesOfObject("table_board_table_board", t);
+        icl_mt.moveVerticesOfObject("table_board_table_board", t);
     }
 
     //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
-    // icl_renderer.renderInteractive(ip);
-    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001/original");
+    icl_renderer.renderInteractive(ip);
+    // icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001/original");
 
     /*
     if(argc != 3){

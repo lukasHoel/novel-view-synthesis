@@ -35,9 +35,11 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
 
         glm::mat4 trans = glm::mat4(1.0f);
 
-        trans = glm::scale(trans, glm::vec3(1, -1, 1));
-        trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
         // trans = glm::translate(trans, glm::vec3(-2.75f, 0.0f, 0.0f));
+    trans = glm::scale(trans, glm::vec3(-1, -1, -1));
+        // trans = glm::scale(trans, glm::vec3(-1, 1, 1));
+    // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
+        // trans = glm::rotate(trans, glm::radians(270.0f), glm::vec3(1.0, 0.0, 0.0));
 
 
 
@@ -71,8 +73,8 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
 
         // // Rot Y with all scale combinations
         ////////////// CURRENT PREFERRED??? ////////////////////////
-        //trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-        //trans = glm::scale(trans, glm::vec3(1, 1, -1));
+        // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+        // trans = glm::scale(trans, glm::vec3(1, 1, -1));
 
         // THIS ONE TOGETHER WITH NON INVERTED EXT AND NON TRANSPOSED EXT ALSO LOOKS GOOD !!!!
         //trans = glm::translate(trans, glm::vec3(0.0f, 0.0f, 0.5f));
@@ -120,7 +122,7 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
             char scene_name[30];
             sprintf(scene_name, "scene_%02d_%04d", ip.getSceneNr(), i);
             filename << save_path << "/" << scene_name << ".depth.png";
-            cv::imwrite(filename.str(), colorImage);
+            // cv::imwrite(filename.str(), colorImage);
 
             std::cout << "Wrote segmentation of: " << scene_name << std::endl;
         }
