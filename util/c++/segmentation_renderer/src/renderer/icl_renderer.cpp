@@ -116,6 +116,41 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         cv::Mat colorImage;
         readRGB(colorImage);
 
+        float min = -1;
+        float max = -1;
+
+        for(int i=0; i<colorImage.rows; i++){
+            for(int j=0; j<colorImage.cols; j++){
+                
+                cv::Vec3b &rgb = colorImage.at<cv::Vec3b>(i,j);
+                // std::cout << static_cast<unsigned>(rgb.val[0]) << static_cast<unsigned>(rgb.val[1]) << static_cast<unsigned>(rgb.val[2]) << std::endl;
+
+                if(min == -1 || rgb.val[0] < min){
+                    min = rgb.val[0];
+                }
+                if(max == -1 || rgb.val[0] > max){
+                    max = rgb.val[0];
+                }
+            }
+        }
+
+        for(int i=0; i<colorImage.rows; i++){
+            for(int j=0; j<colorImage.cols; j++){
+                cv::Vec3b &rgb = colorImage.at<cv::Vec3b>(i,j);
+                float OldRange = max - min;
+                float NewRange = 255;
+
+                rgb.val[0] = (((rgb.val[0] - min) * NewRange) / OldRange) + 0;
+                rgb.val[1] = (((rgb.val[1] - min) * NewRange) / OldRange) + 0;
+                rgb.val[2] = (((rgb.val[2] - min) * NewRange) / OldRange) + 0;
+            }
+        }
+
+        cv::imshow("color image", colorImage); 
+        cv::waitKey(0);
+
+
+
         // read depth image into openCV matrix
         cv::Mat depthImage;
         readDepth(depthImage);
@@ -130,8 +165,8 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         // glGetDoublev( GL_PROJECTION_MATRIX, proj );
         // glGetIntegerv( GL_VIEWPORT, viewport );
 
-        float min = -1;
-        float max = -1;
+        min = -1;
+        max = -1;
 
         for(int i=0; i<depthImage.rows; i++){
             for(int j=0; j<depthImage.cols; j++){

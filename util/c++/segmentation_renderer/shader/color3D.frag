@@ -28,13 +28,21 @@ void main( )
     // float depth = LinearizeDepth(gl_FragCoord.z) / far; // divide by far for demonstration
     // color = vec4(vec3(depth), 1.0);
 
-    vec4 ndc = vec4(gl_FragCoord.xyz * 2.0 - 1.0, 1.0);
+    float x = (gl_FragCoord.x - 0.5) / 640;
+    float y = (gl_FragCoord.y - 0.5) / 480;
+    float z = gl_FragCoord.z;
+
+    vec4 ndc = vec4(x * 2.0 - 1.0, y * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
     vec4 view_space = inverse(projection) * ndc;
 
     // Perspective division
     view_space /= view_space.w;
 
     vec4 world_space = inverse(view) * view_space;
+
+    // vec4 model_space = inverse(model) * world_space;
+
+    // world_space.z += 3;
 
     color = vec4(vec3(world_space.z), 1.0);
 }

@@ -122,10 +122,10 @@ void Renderer::readRGB(cv::Mat& image) {
     image = cv::Mat(m_buffer_height, m_buffer_width, CV_8UC3);
     
     //use fast 4-byte alignment (default anyway) if possible
-    // glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
+    glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
 
     //set length of one complete row in destination data (doesn't need to equal img.cols)
-    // glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
+    glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
 
     glReadPixels(0, 0, image.cols, image.rows, GL_BGR, GL_UNSIGNED_BYTE, image.data);
     cv::flip(image, image, 0);
