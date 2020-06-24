@@ -29,6 +29,7 @@ public:
     int init();
 
     void readRGB(cv::Mat& image);
+    void readDepth(cv::Mat& image);
 
     Model* m_model = nullptr;
 protected:

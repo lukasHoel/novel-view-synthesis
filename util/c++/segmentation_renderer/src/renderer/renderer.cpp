@@ -77,8 +77,6 @@ int Renderer::init() {
     glfwSetCursorPosCallback(m_window, mouse_callback);
     glfwSetScrollCallback(m_window, scroll_callback);
     glfwSetKeyCallback(m_window, key_callback);
-    // tell GLFW to capture our mouse
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // configure global opengl state
     glEnable(GL_DEPTH_TEST);
@@ -124,17 +122,47 @@ void Renderer::readRGB(cv::Mat& image) {
     image = cv::Mat(m_buffer_height, m_buffer_width, CV_8UC3);
     
     //use fast 4-byte alignment (default anyway) if possible
-    glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
+    // glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
 
     //set length of one complete row in destination data (doesn't need to equal img.cols)
-    glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
+    // glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
 
     glReadPixels(0, 0, image.cols, image.rows, GL_BGR, GL_UNSIGNED_BYTE, image.data);
     cv::flip(image, image, 0);
     // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
 }
 
+void Renderer::readDepth(cv::Mat& image) {
+    image = cv::Mat(m_buffer_height, m_buffer_width, CV_32FC1);
+
+    //use fast 4-byte alignment (default anyway) if possible
+    glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
+
+    //set length of one complete row in destination data (doesn't need to equal img.cols)
+    glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
+
+    glReadPixels(0, 0, image.cols, image.rows, GL_DEPTH_COMPONENT, GL_FLOAT, image.data);
+
+    cv::flip(image, image, 0);
+    // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
+
+    // std::vector<float> data_buff(m_buffer_height * m_buffer_width);
+    // glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    // glReadPixels(0, 0, m_buffer_width, m_buffer_height, GL_DEPTH_COMPONENT, GL_FLOAT, data_buff.data());
+    // for (int i = 0; i < m_buffer_height; i++) {
+    //     for (int j = 0; j < m_buffer_width; j++) {
+    //         const float zn = (2 * data_buff[static_cast<int>(i * m_buffer_width + j)] - 1);
+    //         const float ze = (2 * kFarPlane * kNearPlane) / (kFarPlane + kNearPlane + zn*(kNearPlane - kFarPlane));
+    //         image.at<unsigned short>(m_buffer_height - i - 1, j) = ze;
+    //     }
+    // }
+    // cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
+}
+
 void Renderer::renderInteractive(ICL_Parser &ip){
+    // tell GLFW to capture our mouse
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    
     // render loop
     int imgCounter = 0;
     while (!glfwWindowShouldClose(m_window))

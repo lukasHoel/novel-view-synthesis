@@ -109,7 +109,6 @@ class ICLNUIMDataset(DiskDataset):
         # taken from the figure in: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
         #z = ICLNUIMDataset.cam_K['fx'] * np.sqrt( (depth**2) / (x**2 + y**2 + ICLNUIMDataset.cam_K['fx']**2))
 
-
         # taken from the c++ code implementation at https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html in file VaFRIC.cpp#getEuclidean2PlanarDepth
         x_plane = (x - ICLNUIMDataset.cam_K['cx']) / ICLNUIMDataset.cam_K['fx']
         y_plane = (y - ICLNUIMDataset.cam_K['cy']) / ICLNUIMDataset.cam_K['fy']

@@ -110,7 +110,7 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    i = 5
+    i = 1
     item = dataset.__getitem__(i)
 
     print(item["image"].shape)
@@ -160,7 +160,7 @@ def test():
 
     fig.add_subplot(1, 4, 4)
     plt.title("Input Depth Map")
-    plt.imshow(depth, cmap='gray')
+    plt.imshow(depth)
     plt.show()
 
     min_depth = -1
