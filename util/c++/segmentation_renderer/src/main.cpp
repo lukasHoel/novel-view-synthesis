@@ -45,12 +45,13 @@ int main(int argc, char** argv){
         icl_sp.change_colors(mesh);
         ICL_Mesh_Transformer icl_mt(mesh);
         // icl_mt.moveVerticesOfObject("table_board_table_board", t);
+        // test how fast is th?
     }
 
     //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
     // icl_renderer.renderInteractive(ip);
     icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001/original");
-
+    
     /*
     if(argc != 3){
         std::cout << "Usage: " << argv[0] << " path/to/Matterport3D/data/v1/scans <scanID>" << std::endl;

@@ -84,6 +84,7 @@ class ICLNUIMDataset(DiskDataset):
         return inputToOutputIndex
 
     def modify_depth(self, depth):
+        #return depth
         return np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
     def load_int_cam(self):
@@ -196,6 +197,8 @@ def test():
     plt.imshow(out_img)
 
     plt.show()
+
+    print(np.min(depth), np.max(depth))
 
 
 

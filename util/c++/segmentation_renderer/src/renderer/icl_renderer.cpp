@@ -146,8 +146,8 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
             }
         }
 
-        cv::imshow("color image", colorImage); 
-        cv::waitKey(0);
+        // cv::imshow("color image", colorImage); 
+        // cv::waitKey(0);
 
 
 
@@ -157,30 +157,16 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         // cv::imshow("depth image", depthImage); 
         // cv::waitKey(0);
 
-        GLint viewport[4];
-        GLdouble modelview[16];
-        GLdouble proj[16];
-        
-        // glGetDoublev( GL_MODELVIEW_MATRIX, modelview );
-        // glGetDoublev( GL_PROJECTION_MATRIX, proj );
-        // glGetIntegerv( GL_VIEWPORT, viewport );
-
         min = -1;
         max = -1;
 
         for(int i=0; i<depthImage.rows; i++){
-            for(int j=0; j<depthImage.cols; j++){
-                GLdouble posX, posY, posZ; // outputs for gluUnProject
-                
+            for(int j=0; j<depthImage.cols; j++){                
                 const float z = depthImage.at<float>(i,j);
                 const float zn = (2 * z - 1);
                 const float ze = (2 * kFarPlane * kNearPlane) / (kFarPlane + kNearPlane + zn*(kNearPlane - kFarPlane));
                 
-                depthImage.at<float>(i,j) = ze * 255 / kFarPlane;
-
-                // std::cout << "BEFORE: " << depthImage.at<float>(i,j) << std::endl;
-                // gluUnProject(1.0 * j / depthImage.cols, 1.0 * i / depthImage.rows, z, modelview, proj, viewport, &posX, &posY, &posZ);
-                // depthImage.at<float>(i,j) = posZ;
+                depthImage.at<float>(i,j) = ze; // * 255 / kFarPlane
 
                 if(min == -1 || depthImage.at<float>(i,j) < min){
                     min = depthImage.at<float>(i,j);
@@ -188,19 +174,12 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
                 if(max == -1 || depthImage.at<float>(i,j) > max){
                     max = depthImage.at<float>(i,j);
                 }
-                // std::cout << "AFTER: " << depthImage.at<float>(i,j) << std::endl;
+
+                // depthImage.at<float>(i,j) = depthImage.at<float>(i,j) / kFarPlane;
             }
         }
 
-        for(int i=0; i<depthImage.rows; i++){
-            for(int j=0; j<depthImage.cols; j++){
-                float z = depthImage.at<float>(i,j);
-                float OldRange = max - min;
-                float NewRange = 255;
-
-                depthImage.at<float>(i,j) = (((z - min) * NewRange) / OldRange) + 0;
-            }
-        }
+        std::cout << "MIN: " << min << " MAX: " << max << std::endl;
 
         // cv::imshow("depth image", depthImage); 
         // cv::waitKey(0);
@@ -211,11 +190,24 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
             char scene_name[30];
             sprintf(scene_name, "scene_%02d_%04d", ip.getSceneNr(), i);
             filename << save_path << "/" << scene_name << ".png";
-            // cv::imwrite(filename.str(), colorImage);
+            cv::imwrite(filename.str(), colorImage);
 
             std::stringstream depth_filename;
             depth_filename << save_path << "/" << scene_name << ".depth.png";
-            // cv::imwrite(depth_filename.str(), depthImage);
+            cv::imwrite(depth_filename.str(), depthImage);
+
+            // write depth as text 
+            std::stringstream depth_filename_text;
+            depth_filename_text << save_path << "/" << scene_name << ".depth";
+            std::ofstream outfile(depth_filename_text.str());
+            for(int i=0; i<depthImage.rows; i++){
+                for(int j=0; j<depthImage.cols; j++){                
+                    const float z = depthImage.at<float>(i,j);
+                    outfile << z << " ";
+                }
+                outfile << std::endl;
+            }
+            outfile.close();
 
             std::cout << "Wrote segmentation of: " << scene_name << std::endl;
         }

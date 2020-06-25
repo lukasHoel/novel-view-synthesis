@@ -93,7 +93,8 @@ class PtsManipulator(nn.Module):
     ):
 
         if self.mode == PtsManipulator.icl_nuim_dynamic_mode:
-            pts3D *= 10.0 # TODO temporary because we have the depth divided by far plane in the c++ renderer!!
+            pass
+            #pts3D *= 10.0 # TODO temporary because we have the depth divided by far plane in the c++ renderer!!
 
         # add Zs to the coordinate system
         # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image
@@ -111,8 +112,10 @@ class PtsManipulator(nn.Module):
             transformation = dynamics["transformation"] # retrieve dynamic transformation from data
 
             if self.mode == PtsManipulator.icl_nuim_dynamic_mode:
+                pass
                 transformation[:, 0, 3] *= -1 # this is needed because we used this custom world coordinate frame (see c++ renderer)
-                # transformation[:, 2,3] *= -1
+                transformation[:, 1, 3] *= -1
+                transformation[:, 2, 3] *= -1
 
             mask = dynamics["mask"].view(-1) # retrieve mask from data
             wrld_X[:, :, mask] = transformation.matmul(wrld_X[:, :, mask]) # apply transformation to all masked points in the point cloud

@@ -79,8 +79,10 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
             # return moved image with idx + 1, so from the next camera (except for last image, here return idx - 1 moved image)
             return [idx + self.size + 1 if idx < self.size - 1 else idx + self.size - 1 for idx in range(self.size)]
 
-    #def modify_depth(self, depth):
-        #return depth # nothing to do here because we expect the dynamic images to be rendered by our custom renderer which produces already the correct depth values
+    def modify_depth(self, depth):
+        return depth
+        # nothing to do here because we expect the dynamic images to be rendered by our custom renderer which produces already the correct depth values
+        # a test has shown that with doing it like this, we get "straight walls" in world space, otherwise bent ones
 
 def getEulerAngles(R):
     ry = np.arcsin(R[0,2])
@@ -110,7 +112,7 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    i = 1
+    i = 0
     item = dataset.__getitem__(i)
 
     print(item["image"].shape)

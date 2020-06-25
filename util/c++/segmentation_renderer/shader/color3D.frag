@@ -22,27 +22,29 @@ float LinearizeDepth(float depth)
 void main( )
 {
     // USE THIS TO DRAW THE REAL COLORS TO IMAGE
-    // color = vec4(colorV, 1.0);
+    color = vec4(colorV, 1.0);
 
     // USE THIS TO DRAW THE LINEARIZED DEPTH TO IMAGE
     // float depth = LinearizeDepth(gl_FragCoord.z) / far; // divide by far for demonstration
     // color = vec4(vec3(depth), 1.0);
 
-    float x = (gl_FragCoord.x - 0.5) / 640;
-    float y = (gl_FragCoord.y - 0.5) / 480;
-    float z = gl_FragCoord.z;
 
-    vec4 ndc = vec4(x * 2.0 - 1.0, y * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
-    vec4 view_space = inverse(projection) * ndc;
+    // CALCULATE DEPTH BACK TO WORLD COORDINATES
+    // float x = (gl_FragCoord.x) / 640;
+    // float y = (gl_FragCoord.y) / 480;
+    // float z = gl_FragCoord.z;
 
-    // Perspective division
-    view_space /= view_space.w;
+    // vec4 ndc = vec4(x * 2.0 - 1.0, y * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
+    // vec4 view_space = inverse(projection) * ndc;
 
-    vec4 world_space = inverse(view) * view_space;
+    // // Perspective division
+    // view_space /= view_space.w;
 
-    // vec4 model_space = inverse(model) * world_space;
+    // vec4 world_space = inverse(view) * view_space;
 
-    // world_space.z += 3;
+    // // vec4 model_space = inverse(model) * world_space;
 
-    color = vec4(vec3(world_space.z), 1.0);
+    // // world_space.z += 3;
+
+    // color = vec4(vec3(view_space.z * -0.1), 1.0);
 }
