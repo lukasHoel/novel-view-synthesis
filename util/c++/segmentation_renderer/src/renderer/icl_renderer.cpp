@@ -13,7 +13,7 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         glm::mat4 extr = ip.getExtrinsics(i);
         glm::mat3 intr = ip.getIntrinsics();
 
-        //extr = glm::inverse(extr); // RT goes from view to world, but we need world to view
+        extr = glm::inverse(extr); // RT goes from view to world, but we need world to view
         //intr = glm::inverse(intr);
 
         //extr = glm::transpose(extr); // THIS SHOULD NOT BE NECESSARY, is already in column-mayor from method
@@ -36,7 +36,14 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         glm::mat4 trans = glm::mat4(1.0f);
 
         // trans = glm::translate(trans, glm::vec3(-2.75f, 0.0f, 0.0f));
+
+
+
+    // trans = glm::scale(trans, glm::vec3(1, -1, -1)); // with this mode and applying RTinv before this one, it is only flipped but everything else works?
     trans = glm::scale(trans, glm::vec3(-1, -1, -1));
+
+
+
         // trans = glm::scale(trans, glm::vec3(-1, 1, 1));
     // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
         // trans = glm::rotate(trans, glm::radians(270.0f), glm::vec3(1.0, 0.0, 0.0));
@@ -73,6 +80,7 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
 
         // // Rot Y with all scale combinations
         ////////////// CURRENT PREFERRED??? ////////////////////////
+        
         // trans = glm::rotate(trans, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
         // trans = glm::scale(trans, glm::vec3(1, 1, -1));
 
@@ -110,7 +118,8 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
 
         //trans = glm::inverse(trans);     
 
-        render(trans, extr, projection);
+        // render(trans, extr, projection);
+        render(extr, trans, projection); // apply RT in model space (povray icl) before applying a coordinate system change (trans) to opengl world
 
         // read image into openCV matrix
         cv::Mat colorImage;
@@ -146,8 +155,9 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
             }
         }
 
-        // cv::imshow("color image", colorImage); 
-        // cv::waitKey(0);
+        cv::flip(colorImage, colorImage, 0);
+        cv::imshow("color image", colorImage); 
+        cv::waitKey(0);
 
 
 
@@ -185,32 +195,32 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         // cv::waitKey(0);
 
         // save matrix as file
-        if (save_path != "") {
-            std::stringstream filename;
-            char scene_name[30];
-            sprintf(scene_name, "scene_%02d_%04d", ip.getSceneNr(), i);
-            filename << save_path << "/" << scene_name << ".png";
-            cv::imwrite(filename.str(), colorImage);
+        // if (save_path != "") {
+        //     std::stringstream filename;
+        //     char scene_name[30];
+        //     sprintf(scene_name, "scene_%02d_%04d", ip.getSceneNr(), i);
+        //     filename << save_path << "/" << scene_name << ".png";
+        //     cv::imwrite(filename.str(), colorImage);
 
-            std::stringstream depth_filename;
-            depth_filename << save_path << "/" << scene_name << ".depth.png";
-            cv::imwrite(depth_filename.str(), depthImage);
+        //     std::stringstream depth_filename;
+        //     depth_filename << save_path << "/" << scene_name << ".depth.png";
+        //     cv::imwrite(depth_filename.str(), depthImage);
 
-            // write depth as text 
-            std::stringstream depth_filename_text;
-            depth_filename_text << save_path << "/" << scene_name << ".depth";
-            std::ofstream outfile(depth_filename_text.str());
-            for(int i=0; i<depthImage.rows; i++){
-                for(int j=0; j<depthImage.cols; j++){                
-                    const float z = depthImage.at<float>(i,j);
-                    outfile << z << " ";
-                }
-                outfile << std::endl;
-            }
-            outfile.close();
+        //     // write depth as text 
+        //     std::stringstream depth_filename_text;
+        //     depth_filename_text << save_path << "/" << scene_name << ".depth";
+        //     std::ofstream outfile(depth_filename_text.str());
+        //     for(int i=0; i<depthImage.rows; i++){
+        //         for(int j=0; j<depthImage.cols; j++){                
+        //             const float z = depthImage.at<float>(i,j);
+        //             outfile << z << " ";
+        //         }
+        //         outfile << std::endl;
+        //     }
+        //     outfile.close();
 
-            std::cout << "Wrote segmentation of: " << scene_name << std::endl;
-        }
+        //     std::cout << "Wrote segmentation of: " << scene_name << std::endl;
+        // }
 
         // show image in window
         glfwSwapBuffers(m_window);
