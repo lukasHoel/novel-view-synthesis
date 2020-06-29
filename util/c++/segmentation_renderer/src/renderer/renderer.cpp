@@ -15,7 +15,7 @@ bool takeScreenshot = false;
 bool spacePressedAtLeastOnce = false;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 0.0f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f    0.790932f, 1.300000f, 1.462270f
+Camera camera(glm::vec3(0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f    0.790932f, 1.300000f, 1.462270f
 float lastX = DEF_WIDTH / 2.0f;
 float lastY = DEF_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -90,20 +90,8 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
         std::cout << "Cannot render before initializing the renderer" << std::endl;
         return;
     }
-
     GLuint framebuffername = 1;
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffername);
-
-
-
-    // The depth buffer
-	// GLuint depthrenderbuffer;
-	// glGenRenderbuffers(1, &depthrenderbuffer);
-	// glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
-	// glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, m_buffer_width, m_buffer_height);
-	// glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
-
-
 
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -129,6 +117,7 @@ void Renderer::readRGB(cv::Mat& image) {
 
     glReadPixels(0, 0, image.cols, image.rows, GL_BGR, GL_UNSIGNED_BYTE, image.data);
     cv::flip(image, image, 0);
+    cv::flip(image, image, 1);
     // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
 }
 
@@ -144,19 +133,8 @@ void Renderer::readDepth(cv::Mat& image) {
     glReadPixels(0, 0, image.cols, image.rows, GL_DEPTH_COMPONENT, GL_FLOAT, image.data);
 
     cv::flip(image, image, 0);
+    cv::flip(image, image, 1);
     // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
-
-    // std::vector<float> data_buff(m_buffer_height * m_buffer_width);
-    // glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    // glReadPixels(0, 0, m_buffer_width, m_buffer_height, GL_DEPTH_COMPONENT, GL_FLOAT, data_buff.data());
-    // for (int i = 0; i < m_buffer_height; i++) {
-    //     for (int j = 0; j < m_buffer_width; j++) {
-    //         const float zn = (2 * data_buff[static_cast<int>(i * m_buffer_width + j)] - 1);
-    //         const float ze = (2 * kFarPlane * kNearPlane) / (kFarPlane + kNearPlane + zn*(kNearPlane - kFarPlane));
-    //         image.at<unsigned short>(m_buffer_height - i - 1, j) = ze;
-    //     }
-    // }
-    // cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
 }
 
 void Renderer::renderInteractive(ICL_Parser &ip){
@@ -184,29 +162,18 @@ void Renderer::renderInteractive(ICL_Parser &ip){
         glm::mat3 intr = ip.getIntrinsics();
         // glm::mat4 projection = camera_utils::perspective(intr, ip.getWidth(), ip.getHeight(), kNearPlane, kFarPlane);
 
+        glm::mat4 extr_scale = glm::mat4(1.0f);
+        extr_scale = glm::scale(extr_scale, glm::vec3(-1, 1, 1));
         glm::mat4 view = camera.GetViewMatrix();
-        // view = glm::translate(view, glm::vec3(1.3705f, 1.51739f, 1.44963f)); // 0.790932, 1.300000, 1.462270         1.3705f, 1.51739f, 1.44963f
-
-        glm::mat4 model = glm::mat4(1.0f);
-
-        model = glm::scale(model, glm::vec3(1, -1, 1));
-        model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 1.0, 0.0));
-        // model = glm::translate(model, glm::vec3(2.75f, 0.0f, 0.0f));
-        // model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-
-        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.5f));
-        // model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-        // model = glm::scale(model, glm::vec3(-1, 1, 1));
+        view = view * extr_scale;
 
 
-        // std::cout << "MODEL: " << glm::to_string(model) << std::endl;
-        
-        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        //model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
+        glm::mat4 to_opengl_coords = glm::mat4(1.0f);
+        to_opengl_coords = glm::scale(to_opengl_coords, glm::vec3(-1, -1, -1));
 
         // render
         // ------
-        render(model, view, projection);
+        render(view, to_opengl_coords, projection);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -253,6 +220,7 @@ void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter)
             cam_filename << cam_name;
 
             glm::mat4 view = camera.GetViewMatrix();
+            view = glm::inverse(view); // RT goes from world to view, but in ICL we save view-to-world so use this camera here as well.
 
             ofstream cam_file;
             cam_file.open (cam_filename.str());

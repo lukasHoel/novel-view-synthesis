@@ -145,7 +145,8 @@ class DiskDataset(Dataset, ABC):
         if self.dynamics is not None:
             transformation = self.dynamics["transformation"]
             transformation = np.asarray(transformation).reshape((3,4))
-            transformation = np.vstack([transformation, [0, 0, 0, 1]]).astype(np.float32)
+            transformation = np.vstack([transformation, [0, 0, 0, 1]])
+            transformation = self.modify_dynamics_transformation(transformation).astype(np.float32)
 
             color = self.dynamics["color"]
             color = np.asarray(color)
@@ -181,6 +182,15 @@ class DiskDataset(Dataset, ABC):
         Calculates modifications necessary for the concrete dataset after reading depth from file.
         :param depth: depth as read from file
         :return: depth changed as needed
+        """
+        pass
+
+    @abstractmethod
+    def modify_dynamics_transformation(self, transformation):
+        """
+        Calculates modifications necessary for concrete dataset after reading transformation from file.
+        :param transformation:  transformation as read from file with [0 0 0 1] added as last row, so it is a 4x4 RT matrix
+        :return: transformation changed as needed
         """
         pass
 

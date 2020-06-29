@@ -27,8 +27,7 @@ class PtsManipulator(nn.Module):
 
     matterport_mode = 'mp3d'
     icl_nuim_mode = 'icl'
-    icl_nuim_dynamic_mode = 'icl_dynamic'
-    modes = [matterport_mode, icl_nuim_mode, icl_nuim_dynamic_mode]
+    modes = [matterport_mode, icl_nuim_mode]
 
     def __init__(self,
                  mode='mp3d',
@@ -91,11 +90,6 @@ class PtsManipulator(nn.Module):
     def project_pts(
             self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics
     ):
-
-        if self.mode == PtsManipulator.icl_nuim_dynamic_mode:
-            pass
-            #pts3D *= 10.0 # TODO temporary because we have the depth divided by far plane in the c++ renderer!!
-
         # add Zs to the coordinate system
         # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image
         projected_coors = self.xyzs * pts3D
@@ -110,13 +104,6 @@ class PtsManipulator(nn.Module):
         # Add dynamic changes if available
         if dynamics is not None:
             transformation = dynamics["transformation"] # retrieve dynamic transformation from data
-
-            if self.mode == PtsManipulator.icl_nuim_dynamic_mode:
-                pass
-                transformation[:, 0, 3] *= -1 # this is needed because we used this custom world coordinate frame (see c++ renderer)
-                transformation[:, 1, 3] *= -1
-                transformation[:, 2, 3] *= -1
-
             mask = dynamics["mask"].view(-1) # retrieve mask from data
             wrld_X[:, :, mask] = transformation.matmul(wrld_X[:, :, mask]) # apply transformation to all masked points in the point cloud
 
@@ -131,7 +118,7 @@ class PtsManipulator(nn.Module):
         zs = xy_proj[:, 2:3, :]
         zs[mask] = EPS
 
-        if self.mode == PtsManipulator.icl_nuim_mode or self.mode == PtsManipulator.icl_nuim_dynamic_mode:
+        if self.mode == PtsManipulator.icl_nuim_mode:
             # here we concatenate (x,y) / z and the original z-coordinate into a new (x,y,z) vector
             sampler = torch.cat((xy_proj[:, 0:2, :] / zs, xy_proj[:, 2:3, :]), 1)
 

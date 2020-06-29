@@ -39,7 +39,6 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         // read image into openCV matrix
         cv::Mat colorImage;
         readRGB(colorImage);
-        cv::flip(colorImage, colorImage, 1);
         // cv::imshow("color image", colorImage); 
         // cv::waitKey(0);
 
@@ -48,7 +47,6 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
         // read depth image into openCV matrix
         cv::Mat depthImage;
         readDepth(depthImage);
-        cv::flip(depthImage, depthImage, 1);
         // cv::imshow("depth image", depthImage); 
         // cv::waitKey(0);
 
@@ -85,7 +83,7 @@ void ICL_Renderer::renderTrajectory(ICL_Parser& ip, const std::string save_path)
             char scene_name[30];
             sprintf(scene_name, "scene_%02d_%04d", ip.getSceneNr(), i);
             filename << save_path << "/" << scene_name << ".seg.png";
-            // cv::imwrite(filename.str(), colorImage);
+            cv::imwrite(filename.str(), colorImage);
 
             // std::stringstream depth_filename;
             // depth_filename << save_path << "/" << scene_name << ".depth.png";
