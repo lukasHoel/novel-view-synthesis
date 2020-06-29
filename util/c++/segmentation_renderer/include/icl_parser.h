@@ -228,7 +228,7 @@ private:
     unsigned int ICL_HEIGHT = 480;
 
     float fx = 481.2;
-    float fy = -480.0;
+    float fy = -480.0; // OR USE -480.0?
     float cx = 319.5;
     float cy = 239.5;
 };
