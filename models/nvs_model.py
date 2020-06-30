@@ -149,7 +149,8 @@ class NovelViewSynthesisModel(nn.Module):
                 output_RT,
                 output_RT_inv,
                 gt_img=None,
-                depth_img=None):
+                depth_img=None,
+                dynamics=None):
         # ENCODE IMAGE
         if self.use_rgb_features:
             img_features = input_img
@@ -185,7 +186,9 @@ class NovelViewSynthesisModel(nn.Module):
             input_RT_inv,
             output_RT,
             output_RT_inv,
+            dynamics
         )
+
         # TODO is this the class that takes care of ambiguous depth after reprojection?
         '''
         if "modifier" in self.opt.depth_predictor_type:

@@ -84,6 +84,7 @@ class ICLNUIMDataset(DiskDataset):
         return inputToOutputIndex
 
     def modify_depth(self, depth):
+        #return depth
         return np.fromfunction(lambda y, x: self.toImagePlane(depth, x, y), depth.shape, dtype=depth.dtype)
 
     def load_int_cam(self):
@@ -109,7 +110,6 @@ class ICLNUIMDataset(DiskDataset):
         # taken from the figure in: https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html
         #z = ICLNUIMDataset.cam_K['fx'] * np.sqrt( (depth**2) / (x**2 + y**2 + ICLNUIMDataset.cam_K['fx']**2))
 
-
         # taken from the c++ code implementation at https://www.doc.ic.ac.uk/~ahanda/VaFRIC/codes.html in file VaFRIC.cpp#getEuclidean2PlanarDepth
         x_plane = (x - ICLNUIMDataset.cam_K['cx']) / ICLNUIMDataset.cam_K['fx']
         y_plane = (y - ICLNUIMDataset.cam_K['cy']) / ICLNUIMDataset.cam_K['fy']
@@ -118,13 +118,14 @@ class ICLNUIMDataset(DiskDataset):
         return z
 
     def load_data(self, dir_content):
-        img = sorted([f for f in dir_content if f.endswith('.png')])
-        depth = sorted([f for f in dir_content if f.endswith('.depth')])
-        depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy')])
+        img = sorted([f for f in dir_content if f.endswith('.png') and not f.endswith('.seg.png')])
+        depth = sorted([f for f in dir_content if f.endswith('.depth') and not f.endswith('.gl.depth')])
+        has_depth = len(depth) > 0
+        depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy') and not f.endswith('.gl.depth.npy')])
         has_binary_depth = len(depth_binary) > 0
         cam = sorted([f for f in dir_content if f.endswith('.txt')])
 
-        return img, depth, depth_binary, has_binary_depth, cam, len(img)
+        return img, depth, has_depth, depth_binary, has_binary_depth, cam, len(img), None
 
 
 def getEulerAngles(R):
@@ -196,6 +197,8 @@ def test():
     plt.imshow(out_img)
 
     plt.show()
+
+    print(np.min(depth), np.max(depth))
 
 
 

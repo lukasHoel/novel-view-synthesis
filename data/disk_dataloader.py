@@ -78,7 +78,7 @@ class DiskDataset(Dataset, ABC):
 
         # LOAD DATA
         dir_content = os.listdir(path)
-        self.img, self.depth, self.depth_binary, self.has_binary_depth, self.cam, self.size = self.load_data(dir_content)
+        self.img, self.depth, self.has_depth, self.depth_binary, self.has_binary_depth, self.cam, self.size, self.dynamics = self.load_data(dir_content)
 
         # CREATE OUTPUT PAIR
         if self.sampleOutput:
@@ -94,10 +94,12 @@ class DiskDataset(Dataset, ABC):
         if self.has_binary_depth:
             # read faster from .depth.npy file - this is much faster than parsing the char-based .depth file from ICL directly.
             depth = np.load(os.path.join(self.path, self.depth_binary[idx]))
-        else:
+        elif self.has_depth:
             with open(os.path.join(self.path, self.depth[idx])) as f:
                 depth = [float(i) for i in f.read().split(' ') if i.strip()]  # read .depth file
                 depth = np.asarray(depth, dtype=np.float32).reshape(self.imageInputShape)  # convert to same format as image HxW
+        else:
+            return None
 
         # Implementation specific
         depth = self.modify_depth(depth)
@@ -139,6 +141,33 @@ class DiskDataset(Dataset, ABC):
 
         return RT, RTinv
 
+    def load_dynamics(self, image):
+        if self.dynamics is not None:
+            transformation = self.dynamics["transformation"]
+            transformation = np.asarray(transformation).reshape((3,4))
+            transformation = np.vstack([transformation, [0, 0, 0, 1]])
+            transformation = self.modify_dynamics_transformation(transformation).astype(np.float32)
+
+            color = self.dynamics["color"]
+            color = np.asarray(color)
+            image = np.asarray(image) / 255.0
+
+            mask = np.isclose(image, color)
+            mask = mask[:,:,0] & mask[:,:,1] & mask[:,:,2]
+            mask = Image.fromarray(mask)
+
+            if self.transform:
+                mask = self.transform(mask).bool()
+                if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
+                    transformation = torchvision.transforms.ToTensor()(transformation)
+
+            return {
+                "transformation": transformation,
+                "mask": mask
+            }
+        else:
+            return None
+
     @abstractmethod
     def load_int_cam(self):
         """
@@ -156,20 +185,31 @@ class DiskDataset(Dataset, ABC):
         """
         pass
 
+    #@abstractmethod
+    def modify_dynamics_transformation(self, transformation):
+        """
+        Calculates modifications necessary for concrete dataset after reading transformation from file.
+        :param transformation:  transformation as read from file with [0 0 0 1] added as last row, so it is a 4x4 RT matrix
+        :return: transformation changed as needed
+        """
+        raise NotImplementedError()
+
     @abstractmethod
     def load_data(self, dir_content):
         """
         Each dataset defines how to load the data:
             - img: list of all paths to images
             - depth: list of all paths to depth files in .depth format
+            - has_depth: if depth list is empty or not
             - depth_binary: list of all paths to depth files in .depth.npy format
             - has_binary_depth: if depth_binary list is empty or not
             - cam: list of all paths to extrinsic camera .txt files
             - size: how many data samples are available
+            - dynamics: list of path to the .dynamics file. If list is None, then we do not have dynamics for this dataset available.
 
         :param dir_content: list of all files in the root path (self.path)
 
-        :return: tuple (img, depth, depth_binary, has_binary_depth, cam, size)
+        :return: tuple (img, depth, has_depth, depth_binary, has_binary_depth, cam, size, dynamics)
         """
         pass
 
@@ -191,7 +231,8 @@ class DiskDataset(Dataset, ABC):
                 'image': image,
                 'depth': depth,
                 'cam': cam,
-                'output': output
+                'output': output,
+                'dynamics': dynamics
             }
             where
               image is a WxHxC matrix of floats,
@@ -218,18 +259,28 @@ class DiskDataset(Dataset, ABC):
                 where
                   image is a random neighboring image
                   idx is the index of the neighboring image (and of cam['RT2'])
+              dynamics is a dictionary or None:
+                {
+                    "mask": pixel mask of input image that is 1 for all pixels that were moved and 0 for all other pixels.
+                    "transformation": 4x4 [R|T] matrix that was applied to the object identified by the pixel mask as the dynamic change.
+                }
 
 
 
         """
 
+        # LOAD FROM CACHE
         if self.itemCache[idx] is not None:
             return self.itemCache[idx]
 
+        # LOAD INPUT IMAGE
         image = self.load_image(idx)
-        depth = self.load_depth(idx)
-        RT1, RT1inv = self.load_ext_cam(idx)
 
+        # LOAD INPUT DEPTH
+        depth = self.load_depth(idx)
+
+        # LOAD INPUT CAM
+        RT1, RT1inv = self.load_ext_cam(idx)
         cam = {
             'RT1': RT1,
             'RT1inv': RT1inv,
@@ -237,12 +288,13 @@ class DiskDataset(Dataset, ABC):
             'Kinv': self.Kinv
         }
 
+        # LOAD OUTPUT
         output = None
         if self.sampleOutput:
             # lookup output for this sample
             output_idx = self.inputToOutputIndex[idx]
 
-            # load image of new index
+            # load image and depth of new index
             output_image = self.load_image(output_idx)
             output_depth = self.load_depth(output_idx)
 
@@ -258,20 +310,30 @@ class DiskDataset(Dataset, ABC):
                 'idx': output_idx
             }
 
+        # LOAD DYNAMICS
+        dynamics = self.load_dynamics(image)
+
+        # CONSTRUCT SAMPLE
         sample = {
             'image': image,
             'depth': depth,
             'cam': cam,
-            'output': output
+            'output': output,
+            'dynamics': dynamics
         }
 
+        # APPLY TRANSFORM OBJECT
         if self.transform:
             sample['image'] = self.transform(sample['image'])
-            sample['depth'] = self.transform_depth(sample['depth'])
+            if sample['depth'] is not None:
+                sample['depth'] = self.transform_depth(sample['depth'])
+
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
-                sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
+                if sample['output']['depth'] is not None:
+                    sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
 
+        # STORE IN CACHE
         if self.cacheItems:
             self.itemCache[idx] = sample
 

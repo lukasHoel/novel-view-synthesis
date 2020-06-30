@@ -88,7 +88,7 @@ class PtsManipulator(nn.Module):
         self.register_buffer("xyzs", xyzs)
 
     def project_pts(
-            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            self, pts3D, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics
     ):
         # add Zs to the coordinate system
         # projected_coors is then [X*Z, -Y*Z, -Z, 1] with Z being the depth of the image
@@ -100,6 +100,16 @@ class PtsManipulator(nn.Module):
 
         # Transform to World Coordinates with RT of input view
         wrld_X = RT_cam1.bmm(cam1_X)
+
+        # Add dynamic changes if available
+        if dynamics is not None:
+            bs = wrld_X.shape[0] # batch size
+            transformation = dynamics["transformation"] # retrieve dynamic transformation from data
+            mask = dynamics["mask"].view(bs, -1) # retrieve mask from data and flatten because wrld_X is flattened, too.
+            #wrld_X[:, :, mask] = transformation.bmm(wrld_X[:, :, mask])
+            # TODO how to vectorize this?
+            for i in range(bs):
+                wrld_X[i, :, mask[i]] = transformation[i].matmul(wrld_X[i, :, mask[i]]) # apply transformation to all masked points in the point cloud
 
         # Transform from World coordinates to camera of output view
         new_coors = RTinv_cam2.bmm(wrld_X)
@@ -113,7 +123,7 @@ class PtsManipulator(nn.Module):
         zs[mask] = EPS
 
         if self.mode == PtsManipulator.icl_nuim_mode:
-            # here we concatenate (x,y) / -z and the original z-coordinate into a new (x,y,z) vector
+            # here we concatenate (x,y) / z and the original z-coordinate into a new (x,y,z) vector
             sampler = torch.cat((xy_proj[:, 0:2, :] / zs, xy_proj[:, 2:3, :]), 1)
 
             # rescale coordinates to work with splatting and move to origin
@@ -134,7 +144,7 @@ class PtsManipulator(nn.Module):
         return sampler
 
     def forward_justpts(
-            self, src, pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            self, src, pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics=None
     ):
         # Now project these points into a new view
         bs, c, w, h = src.size()
@@ -145,7 +155,7 @@ class PtsManipulator(nn.Module):
             src = src.view(bs, c, -1)
 
         pts3D = self.project_pts(
-            pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2
+            pred_pts, K, K_inv, RT_cam1, RTinv_cam1, RT_cam2, RTinv_cam2, dynamics
         )
         pointcloud = pts3D.permute(0, 2, 1).contiguous()
         result = self.splatter(pointcloud, src)

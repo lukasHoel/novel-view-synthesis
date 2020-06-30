@@ -1,9 +1,14 @@
 #include <iostream>
 
-#include "renderer.h"
-#include "segmentation_provider.h"
-#include "mp.h"
-#include "mesh_transformer.h"
+#include "icl_renderer.h"
+#include "icl_parser.h"
+#include "icl_mesh_transformer.h"
+#include "icl_segmentation_provider.h"
+
+//#include "mp_renderer.h"
+//#include "mp_parser.h"
+//#include "segmentation_provider.h"
+//#include "mesh_transformer.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -23,6 +28,47 @@
 */
 
 int main(int argc, char** argv){
+
+    // ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop", 0);
+    ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001/original", 0);
+
+    ICL_Renderer icl_renderer("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
+
+    ICL_Segmentation_Provider icl_sp("../src/icl_nuim/object_to_color.txt");
+
+    glm::mat4 t(1.0f);
+    t = glm::translate(t, glm::vec3(0.5f, 0.0f, 0.3f)); // for seq0001
+    t = glm::rotate(t, glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f)); // for seq0002
+    t = glm::rotate(t, glm::radians(15.0f), glm::vec3(1.0f, 1.0f, 0.0f));
+    std::string move_object = "table_board_table_board";
+
+    std::cout << glm::to_string(t) << std::endl;
+
+    for(auto& mesh : icl_renderer.m_model->meshes){
+        icl_sp.change_colors(mesh);
+    }
+
+    // RENDER ORIGINAL
+    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003/original");
+
+    // RENDER MOVED
+
+    for(auto& mesh : icl_renderer.m_model->meshes){
+        ICL_Mesh_Transformer icl_mt(mesh);
+        icl_mt.moveVerticesOfObject(move_object, t);
+    }
+
+    json moved_json;
+    moved_json.push_back(icl_sp.getMovementAsJson(move_object, t));
+    std::ofstream moved_file("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003/moved.txt");
+    moved_file << std::setw(4) << moved_json << std::endl;
+
+    //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
+    // icl_renderer.renderInteractive(ip);
+    icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003/moved");
+    // icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop");
+    
+    /*
     if(argc != 3){
         std::cout << "Usage: " << argv[0] << " path/to/Matterport3D/data/v1/scans <scanID>" << std::endl;
         return EXIT_FAILURE;
@@ -41,7 +87,7 @@ int main(int argc, char** argv){
 
         regionPath += "/region0."; // TODO instead loop over all regions!
 
-        Renderer renderer(regionPath + "ply", mp, 0);
+        MP_Renderer renderer(regionPath + "ply", mp, 0);
 
         std::cout << "Renderer initialized" << std::endl;
 
@@ -78,6 +124,7 @@ int main(int argc, char** argv){
         std::cerr << "Caught exception: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }
+    */
     
 
     return EXIT_SUCCESS;

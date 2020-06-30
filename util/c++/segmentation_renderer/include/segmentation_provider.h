@@ -25,7 +25,7 @@ class Segmentation_Provider {
         json vseg;
         json semseg;
         std::vector<int> vertex_to_segment;
-        std::map<int, int> segment_to_object_id;;
+        std::map<int, int> segment_to_object_id;
         std::map<int, glm::vec3> object_id_to_color;
 
         void random_rgb(float rgb[]){

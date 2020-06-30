@@ -28,6 +28,8 @@ struct Vertex {
     glm::vec3 Bitangent;
     // Color
     glm::vec3 Color;
+    // Name (any identifier to use for this vertex - custom attribute)
+    std::string Name;
 };
 
 struct Texture {

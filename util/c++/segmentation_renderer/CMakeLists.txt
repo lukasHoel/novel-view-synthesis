@@ -16,9 +16,14 @@ find_package(Assimp REQUIRED)
 
 add_executable(${PROJECT_NAME} src/main.cpp
  src/renderer/renderer.cpp
+ 
+ src/renderer/icl_renderer.cpp
+ src/mesh_transformer/icl_mesh_transformer.cpp
+
  src/mp_parser/segmentation_provider.cpp
- src/mp_parser/mp.cpp
- src/mesh_transformer/mesh_transformer.cpp)
+ src/mp_parser/mp_parser.cpp
+ src/mesh_transformer/mesh_transformer.cpp
+ src/icl_nuim/icl_segmentation_provider.cpp)
 
 target_include_directories(
     ${PROJECT_NAME} PRIVATE include

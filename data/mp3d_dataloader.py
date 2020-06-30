@@ -71,6 +71,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
         # only take the _0 to be chosen and let _1 always be the output pair. This way we do not use data twice!
         img = list(filter(lambda x: x.endswith('_0.png'), files))
         depth = list(filter(lambda x: x.endswith('_0.depth'), files))
+        has_depth = len(depth) > 0
         depth_binary = list(filter(lambda x: x.endswith('_0.depth.npy'), files))
         has_binary_depth = len(depth_binary) > 0
         cam = list(filter(lambda x: x.endswith('_0.txt'), files))
@@ -104,7 +105,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
             print("number of camera .txt with _0 ({}) and _1 ({}) identical".format(len(cam), len(out_cam)))
             cam.extend(out_cam)
 
-        return img, depth, depth_binary, has_binary_depth, cam, len(img)//2
+        return img, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None
 
     def modify_depth(self, depth):
         return depth # nothing to do here

@@ -1,19 +1,21 @@
 #include "renderer.h"
 #include "model.h"
-#include "util.h"
+// #include "util.h"
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/string_cast.hpp>
-
-#include <glm/gtc/type_ptr.hpp>
+// basic file operations
+#include <iostream>
+#include <fstream>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow *window);
+void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+bool takeScreenshot = false;
+bool spacePressedAtLeastOnce = false;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(0.790932f, 1.300000f, 1.462270f)); // 1.3705f, 1.51739f, 1.44963f    0.0f, 0.0f, 3.0f      -0.3f, 0.3f, 0.3f    0.790932f, 1.300000f, 1.462270f
 float lastX = DEF_WIDTH / 2.0f;
 float lastY = DEF_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -22,11 +24,10 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-Renderer::Renderer(string const &pathToMesh, MP_Parser const &mp_parser, int region_index): 
-                    mp_parser(mp_parser), region_index(region_index) {
-    m_buffer_width = mp_parser.regions[region_index]->panoramas[0]->images[0]->width;
-    m_buffer_height = mp_parser.regions[region_index]->panoramas[0]->images[0]->height;
-    
+Renderer::Renderer(string const &pathToMesh, int width, int height) {  
+    m_buffer_width = width;
+    m_buffer_height = height;
+
     if(init()){
         // if init fails, then the return code is != 0 which is equal to this if statement
         throw std::runtime_error("Failed to init renderer");
@@ -75,8 +76,7 @@ int Renderer::init() {
     glfwSetFramebufferSizeCallback(m_window, framebuffer_size_callback);
     glfwSetCursorPosCallback(m_window, mouse_callback);
     glfwSetScrollCallback(m_window, scroll_callback);
-    // tell GLFW to capture our mouse
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetKeyCallback(m_window, key_callback);
 
     // configure global opengl state
     glEnable(GL_DEPTH_TEST);
@@ -90,7 +90,6 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
         std::cout << "Cannot render before initializing the renderer" << std::endl;
         return;
     }
-
     GLuint framebuffername = 1;
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffername);
 
@@ -106,73 +105,44 @@ void Renderer::render(const glm::mat4& model, const glm::mat4& view, const glm::
     m_model->draw(*m_shader);
 }
 
-/*
-    - The region_X.ply are still in world-coordinates, e.g. region0 is left and region6 is centered.
-    - Thus I can use the camera extrinsics/intrinsics also for the regions only
-    - This means, that I can use regions + vseg file (Alternative: use whole house mesh and parse fseg file instead of vseg)
-    - For each image (matterport_color_images.zip) we have a corresponding extrinsic/intrinsic file with same name
-        --> Use this for calculating the view and projection matrices
-        --> But these parameters are distorted, e.g. the intrinsic files contain arbitrary 3x3 matrix
-        --> This is solved in undistorted_camera_parameters.zip
-        --> The same values as in undistorted_camera_parameters.zip are also present in the .house file
-        --> Just use the extrinsic/intrinsic parameters from the .house file!
-        --> Note that the extrinsic parameters differ in the .house file and in the undistorted file. What is correct?
-    - Find out which image corresponds to which region. It only makes sense to use the images for the corresponding region
-        --> Otherwise we would look at nothing because in that case the region is not present
-        --> Can I do it like this? Parse .house file and go like this: Image Name --> Panorama Index --> Region Index ? --> Yes!
-*/
-void Renderer::renderImages(const std::string save_path){
-
-    for(int i=0; i<mp_parser.regions[region_index]->panoramas.size(); i++){
-        for(MPImage* image : mp_parser.regions[region_index]->panoramas[i]->images){
-
-            glm::mat4 extr = glm::transpose(glm::make_mat4(image->extrinsics));
-            glm::mat3 intr = glm::make_mat3(image->intrinsics);
-            glm::mat4 projection = camera_utils::perspective(intr, image->width, image->height, kNearPlane, kFarPlane);
-
-            // render image
-            render(glm::mat4(1.0f), extr, projection);
-
-            // read image into openCV matrix
-            cv::Mat colorImage;
-            readRGB(colorImage);
-
-            // save matrix as file
-            if ((save_path != "") && (!colorImage.empty())) {
-                std::stringstream filename;
-                filename << save_path << "/segmentation_" << image->color_filename;
-                cv::imwrite(filename.str(), colorImage);
-
-                std::cout << "Wrote segmentation of: " << image->color_filename << std::endl;
-            }
-
-            // show image in window
-            glfwSwapBuffers(m_window);
-
-        }
-    
-    }
-}
-
 void Renderer::readRGB(cv::Mat& image) {
     glBindFramebuffer(GL_FRAMEBUFFER, 4);
     image = cv::Mat(m_buffer_height, m_buffer_width, CV_8UC3);
-    std::vector<float> data_buff(m_buffer_width * m_buffer_height * 3);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, m_buffer_width, m_buffer_height, GL_RGB, GL_FLOAT, data_buff.data());
-    for (int i = 0; i < m_buffer_height; ++i) {
-        for (int j = 0; j < m_buffer_width; ++j) {
-            for (int c = 0; c < 3; c++) {
-                image.at<cv::Vec3b>(m_buffer_height - i - 1, j)[2 - c] = 
-                    static_cast<int>(256 * data_buff[int(3 * i * m_buffer_width + 3 * j + c)]);
-            }
-        }
-    }
-    // cv::rotate(image, image, cv::ROTATE_90_CLOCKWISE);
+    
+    //use fast 4-byte alignment (default anyway) if possible
+    glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
+
+    //set length of one complete row in destination data (doesn't need to equal img.cols)
+    glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
+
+    glReadPixels(0, 0, image.cols, image.rows, GL_BGR, GL_UNSIGNED_BYTE, image.data);
+    cv::flip(image, image, 0);
+    cv::flip(image, image, 1);
+    // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
 }
 
-void Renderer::renderInteractive(){
+void Renderer::readDepth(cv::Mat& image) {
+    image = cv::Mat(m_buffer_height, m_buffer_width, CV_32FC1);
+
+    //use fast 4-byte alignment (default anyway) if possible
+    glPixelStorei(GL_PACK_ALIGNMENT, (image.step & 3) ? 1 : 4);
+
+    //set length of one complete row in destination data (doesn't need to equal img.cols)
+    glPixelStorei(GL_PACK_ROW_LENGTH, image.step/image.elemSize());
+
+    glReadPixels(0, 0, image.cols, image.rows, GL_DEPTH_COMPONENT, GL_FLOAT, image.data);
+
+    cv::flip(image, image, 0);
+    cv::flip(image, image, 1);
+    // see: https://stackoverflow.com/questions/9097756/converting-data-from-glreadpixels-to-opencvmat/9098883
+}
+
+void Renderer::renderInteractive(ICL_Parser &ip){
+    // tell GLFW to capture our mouse
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    
     // render loop
+    int imgCounter = 0;
     while (!glfwWindowShouldClose(m_window))
     {
 
@@ -184,27 +154,26 @@ void Renderer::renderInteractive(){
 
         // input
         // -----
-        processInput(m_window);
+        processInput(m_window, *this, &imgCounter);
         
         // model/view/projection transformations
         // ------
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)m_buffer_width / (float)m_buffer_height, 0.1f, 100.0f);
+        glm::mat3 intr = ip.getIntrinsics();
+        // glm::mat4 projection = camera_utils::perspective(intr, ip.getWidth(), ip.getHeight(), kNearPlane, kFarPlane);
 
-        // MPImage* startImage = mp_parser.regions[region_index]->panoramas[0]->images[0];
-        // std::cout << startImage->color_filename << std::endl;
-        // glm::mat4 view = glm::transpose(glm::make_mat4(startImage->extrinsics));
-        // glm::mat3 intr = glm::make_mat3(startImage->intrinsics);
-        // glm::mat4 projection = camera_utils::perspective(intr, startImage->width, startImage->height, kNearPlane, kFarPlane);
-        // glm::mat4 model = glm::mat4(1.0f);
-
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)DEF_WIDTH / (float)DEF_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 extr_scale = glm::mat4(1.0f);
+        extr_scale = glm::scale(extr_scale, glm::vec3(-1, 1, 1));
         glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// it's a bit too big for our scene, so scale it down
+        view = view * extr_scale;
+
+
+        glm::mat4 to_opengl_coords = glm::mat4(1.0f);
+        to_opengl_coords = glm::scale(to_opengl_coords, glm::vec3(-1, -1, -1));
 
         // render
         // ------
-        render(model, view, projection);
+        render(view, to_opengl_coords, projection);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -215,7 +184,7 @@ void Renderer::renderInteractive(){
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
+void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -228,6 +197,61 @@ void processInput(GLFWwindow *window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    if (takeScreenshot){
+        cv::Mat colorImage;
+        renderer.readRGB(colorImage);
+
+        // save matrix as file
+        if (!colorImage.empty()) {
+            std::stringstream image_filename;
+            char image_name[30];
+            sprintf(image_name, "scene_00_%04d.png", *imgCounter);
+            image_filename << image_name;
+            cv::imwrite(image_filename.str(), colorImage);
+
+            std::cout << "Wrote image: " << image_name << std::endl;
+
+
+            // write cam matrix
+            std::stringstream cam_filename;
+            char cam_name[30];
+            sprintf(cam_name, "scene_00_%04d.txt", *imgCounter);
+            cam_filename << cam_name;
+
+            glm::mat4 view = camera.GetViewMatrix();
+            view = glm::inverse(view); // RT goes from world to view, but in ICL we save view-to-world so use this camera here as well.
+
+            ofstream cam_file;
+            cam_file.open (cam_filename.str());
+            cam_file << "cam_pos\t= [" << view[3][0] << ", " << view[3][1] << ", " << view[3][2] << "]';\n";
+            cam_file << "cam_dir\t= [" << view[2][0] << ", " << view[2][1] << ", " << view[2][2] << "]';\n";
+            cam_file << "cam_up\t= [" << view[1][0] << ", " << view[1][1] << ", " << view[1][2] << "]';\n";
+            cam_file.close();
+
+            std::cout << "Wrote cam: " << cam_name << std::endl;
+
+            // increment
+            (*imgCounter)++;
+        }
+
+        takeScreenshot = false;
+    }
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if ( (key == GLFW_KEY_SPACE && action == GLFW_PRESS) 
+       ||(key == GLFW_KEY_W && spacePressedAtLeastOnce && action == GLFW_PRESS)
+       ||(key == GLFW_KEY_A && spacePressedAtLeastOnce && action == GLFW_PRESS)
+       ||(key == GLFW_KEY_S && spacePressedAtLeastOnce && action == GLFW_PRESS)
+       ||(key == GLFW_KEY_D && spacePressedAtLeastOnce && action == GLFW_PRESS)){
+        takeScreenshot = true;
+    }
+
+    if (! spacePressedAtLeastOnce && key == GLFW_KEY_SPACE && action == GLFW_PRESS){
+        spacePressedAtLeastOnce = true;
+    }
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
