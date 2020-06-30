@@ -59,7 +59,7 @@ class PtsManipulator(nn.Module):
             accumulation_tau=accumulation_tau
         )
 
-        if mode == PtsManipulator.icl_nuim_mode or mode == PtsManipulator.icl_nuim_dynamic_mode:
+        if mode == PtsManipulator.icl_nuim_mode:
             self.img_shape = (H, W)
 
             # create coordinate system for x and y
