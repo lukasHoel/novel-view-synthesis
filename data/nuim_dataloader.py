@@ -118,10 +118,10 @@ class ICLNUIMDataset(DiskDataset):
         return z
 
     def load_data(self, dir_content):
-        img = sorted([f for f in dir_content if f.endswith('.png')])
-        depth = sorted([f for f in dir_content if f.endswith('.depth')])
+        img = sorted([f for f in dir_content if f.endswith('.png') and not f.endswith('.seg.png')])
+        depth = sorted([f for f in dir_content if f.endswith('.depth') and not f.endswith('.gl.depth')])
         has_depth = len(depth) > 0
-        depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy')])
+        depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy') and not f.endswith('.gl.depth.npy')])
         has_binary_depth = len(depth_binary) > 0
         cam = sorted([f for f in dir_content if f.endswith('.txt')])
 

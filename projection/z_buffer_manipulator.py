@@ -103,9 +103,13 @@ class PtsManipulator(nn.Module):
 
         # Add dynamic changes if available
         if dynamics is not None:
+            bs = wrld_X.shape[0] # batch size
             transformation = dynamics["transformation"] # retrieve dynamic transformation from data
-            mask = dynamics["mask"].view(-1) # retrieve mask from data
-            wrld_X[:, :, mask] = transformation.matmul(wrld_X[:, :, mask]) # apply transformation to all masked points in the point cloud
+            mask = dynamics["mask"].view(bs, -1) # retrieve mask from data and flatten because wrld_X is flattened, too.
+            #wrld_X[:, :, mask] = transformation.bmm(wrld_X[:, :, mask])
+            # TODO how to vectorize this?
+            for i in range(bs):
+                wrld_X[i, :, mask[i]] = transformation[i].matmul(wrld_X[i, :, mask[i]]) # apply transformation to all masked points in the point cloud
 
         # Transform from World coordinates to camera of output view
         new_coors = RTinv_cam2.bmm(wrld_X)

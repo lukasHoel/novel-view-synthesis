@@ -14,7 +14,8 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
                  output_from_other_view=False,
                  inverse_depth=False,
                  cacheItems=False,
-                 transform=None):
+                 transform=None,
+                 out_shape=(480,640)):
         self.output_from_other_view = output_from_other_view
 
         ICLNUIMDataset.__init__(self,
@@ -22,7 +23,8 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
                              sampleOutput=sampleOutput,
                              inverse_depth=inverse_depth,
                              cacheItems=cacheItems,
-                             transform=transform)
+                             transform=transform,
+                             out_shape=out_shape)
 
     def load_data(self, dir_content):
 

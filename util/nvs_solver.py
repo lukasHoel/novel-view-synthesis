@@ -21,7 +21,12 @@ def to_cuda(data_tuple):
     out = ()
     if torch.cuda.is_available():
         for data in data_tuple:
-            out += (data.to("cuda:0"),)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    data[k] = data[k].to("cuda:0")
+                out += (data,)
+            else:
+                out += (data.to("cuda:0"),)
     return out
 
 def default_batch_loader(batch):
@@ -34,8 +39,9 @@ def default_batch_loader(batch):
     output_RT_inv = batch['cam']['RT2inv']
     gt_img = batch['output']['image'] if batch['output'] is not None else None
     depth_img = batch['depth']
+    dynamics = batch['dynamics']
 
-    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, depth_img
+    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, depth_img, dynamics
 
 # NOTE: Unused, might be used for debugging
 def check_norm(img, verbose=False):

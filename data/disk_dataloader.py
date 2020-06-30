@@ -185,14 +185,14 @@ class DiskDataset(Dataset, ABC):
         """
         pass
 
-    @abstractmethod
+    #@abstractmethod
     def modify_dynamics_transformation(self, transformation):
         """
         Calculates modifications necessary for concrete dataset after reading transformation from file.
         :param transformation:  transformation as read from file with [0 0 0 1] added as last row, so it is a 4x4 RT matrix
         :return: transformation changed as needed
         """
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def load_data(self, dir_content):
