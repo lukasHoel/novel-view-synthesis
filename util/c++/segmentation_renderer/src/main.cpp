@@ -46,33 +46,35 @@ int main(int argc, char** argv){
         std::cout << "Renderer initialized" << std::endl;
 
         Segmentation_Provider sp(regionPath + "semseg.json", regionPath + "vsegs.json");
-        for(auto& mesh : renderer.m_model->meshes){
-            sp.change_colors(mesh);
-        }
+        // for(auto& mesh : renderer.m_model->meshes){
+        //     sp.change_colors(mesh);
+        // }
+        // renderer.renderInteractive();
 
-        std::cout << "Updated Mesh Colors according to object instance segmentation" << std::endl;
+        // std::cout << "Updated Mesh Colors according to object instance segmentation" << std::endl;
 
-        // render original (before move)
-        renderer.renderImages(outdir + "/original");
+        // // render original (before move)
+        // renderer.renderImages(outdir + "/original");
 
         for(auto& mesh : renderer.m_model->meshes){
             Mesh_Transformer transform(mesh, sp);
-            transform.splitMeshAtObject(1);
+            transform.splitMeshAtObject(11);
             glm::mat4 t = { 1, 0, 0, 0,
                             0, 1, 0, 0,
                             0, 0, 1, 0,
                             0, -0.5, 0.5, 1 };
-            transform.moveVerticesOfObject(1, t);
+            transform.moveVerticesOfObject(11, t);
         }
+        renderer.renderInteractive();
 
-        std::cout << "Splitted and transformed mesh: pillow with id 1 translated by (0, -0.5, 0.5)" << std::endl;
+        std::cout << "Splitted and transformed mesh: pillow with id 11 translated by (0, -0.5, 0.5)" << std::endl;
+        string save_path("x.ply");
+        renderer.m_model->save(save_path);
 
         // render moved
-        renderer.renderImages(outdir + "/moved");
+        // renderer.renderImages(outdir + "/moved");
 
-        std::cout << "Render images completed" << std::endl;
-
-        // renderer.renderInteractive();
+        // std::cout << "Render images completed" << std::endl;
 
     } catch(const exception& e){
         std::cerr << "Caught exception: " << e.what() << std::endl;

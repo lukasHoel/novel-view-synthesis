@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <assimp/Importer.hpp>
+#include <assimp/Exporter.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <opencv2/opencv.hpp>
@@ -43,15 +44,42 @@ public:
         for(unsigned int i = 0; i < meshes.size(); i++)
             meshes[i].draw(shader);
     }
+
+    void save(string path)
+    {
+        // save file via ASSIMP
+        int count = aiGetExportFormatCount();
+        for(int i=0; i<count; i++){
+            cout << i << endl;
+            cout << aiGetExportFormatDescription(i)->id << endl;
+            cout << aiGetExportFormatDescription(i)->fileExtension << endl;
+            cout << endl;
+        }
+        // aiGetExportFormatDescription(8)->fileExtension
+        Assimp::Exporter exporter;
+
+        aiReturn ret = exporter.Export(this->scene, "plyb", path);
+        if(ret == AI_SUCCESS){
+            cout << "Saved successfully!" << endl;
+        }
+        else if(ret == AI_FAILURE){
+            cout << "ERROR::ASSIMP::FAILURE" << endl;
+        }
+        else{
+            cout << "ERROR::ASSIMP::OOM" << endl;
+        }
+    }
     
 private:
+    const aiScene* scene;
+
     /*  Functions   */
     // loads a model with supported ASSIMP extensions from file and stores the resulting meshes in the meshes vector.
     void loadModel(string const &path)
     {
         // read file via ASSIMP
         Assimp::Importer importer;
-        const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+        this->scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
 
         // check for errors
         if(!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
@@ -63,7 +91,7 @@ private:
         directory = path.substr(0, path.find_last_of('/'));
 
         // process ASSIMP's root node recursively
-        processNode(scene->mRootNode, scene);
+        processNode(this->scene->mRootNode, this->scene);
     }
 
     // processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
