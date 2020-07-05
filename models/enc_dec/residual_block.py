@@ -12,8 +12,8 @@ class Identity(nn.Module):
 # NOTE: Following layers have no associated parameters, therefore they are safe to reuse
 block_types = {
     "id": Identity(),                                        
-    "ups": nn.AvgPool2d(kernel_size=3, stride=2, padding=1),
-    "avg": nn.Upsample(scale_factor=2, mode="bilinear")
+    "avg": nn.AvgPool2d(kernel_size=3, stride=2, padding=1),
+    "ups": nn.Upsample(scale_factor=2, mode="bilinear")
 }
 
 ############################
