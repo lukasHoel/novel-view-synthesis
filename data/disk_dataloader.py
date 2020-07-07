@@ -63,7 +63,7 @@ class DiskDataset(Dataset, ABC):
         # SAVE TRANSFORM OBJECT IN CLASS
         self.transform = transform
         # Fix for this issue: https://github.com/pytorch/vision/issues/2194
-        if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
+        if self.transform and isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
             self.transform_depth = torchvision.transforms.Compose([
                 *self.transform.transforms[:-1],
                 ToNumpy(),

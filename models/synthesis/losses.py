@@ -3,6 +3,34 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import vgg19
 
+class LPRegionLoss(nn.Module):
+
+    def __init__(self, p=1, lower_weight = 0.0, higher_weight = 2.0):
+        super().__init__()
+        self.p = int(p)
+        self.lower_weight = lower_weight
+        self.higher_weight = higher_weight
+
+    def forward(self, pred_img, gt_img, mask_lower_region, mask_higher_region):
+
+        # check if lower and higher region overlap. If so: truncate the lower region
+        overlap = mask_lower_region == mask_higher_region
+        mask_lower_region[overlap] = False
+
+        # apply lower_weight to the lower_important region
+        pred_img[:, mask_lower_region] *= self.lower_weight
+        gt_img[:, mask_lower_region] *= self.lower_weight
+
+        # apply higher_weight to the higher_important region
+        pred_img[:, mask_higher_region] *= self.higher_weight
+        gt_img[:, mask_higher_region] *= self.higher_weight
+
+        # calculate lp loss
+        loss = torch.mean((pred_img - gt_img)**self.p)
+        return {"LPRegion": loss, "Total Loss": loss}
+
+
+
 class L1LossWrapper(nn.Module):
     """Wrapper of the L1Loss so that the format matches what is expected"""
     def forward(self, pred_img, gt_img):

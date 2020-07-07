@@ -1,6 +1,66 @@
 from models.synthesis.losses import *
 from models.synthesis.metrics import *
 
+class SynthesisRegionLoss(nn.Module):
+    """
+    Class for simultaneous calculation of normal SynthesisLoss (L1, content/perceptual) and region-based losses (LPRegionLoss).
+    Losses to use should be passed as argument.
+    """
+    def __init__(self,
+                 non_region_losses=['1.0_l1', '10.0_content'],
+                 region_losses={"1.0_lp": [1.0, 0.0, 2.0]}):
+        """
+
+        Supported region_losses:
+            - lp: LPRegionLoss
+
+        :param non_region_losses: used to create a SynthesisLoss. See that class for explanation of argument.
+        :param region_losses: dict where each key is a <weight>_<name> pair as for the SynthesisLoss.
+                Each value is an implementation-specific list that can be passed as-is to the specific class, i.e.
+                we can construct LPRegionLoss with: LPRegionLoss(*value) where value is taken from the dict with a
+                corresponding key.
+        """
+        super().__init__()
+
+        self.normal = SynthesisLoss(non_region_losses)
+        lambdas, loss_names = zip(
+            *[loss_name.split("_") for loss_name in region_losses.keys()])  # Parse lambda and loss_names from dict keys
+        print("Loss names:", loss_names)
+        print("Weight of each loss:", lambdas)
+        lambdas = [float(l) for l in lambdas]  # [str] -> [float]
+
+        self.lambdas = lambdas
+        self.losses = nn.ModuleList(
+            [self.get_loss_from_dict(k,v) for k,v in region_losses]
+        )
+
+    def get_loss_from_dict(self, key, value):
+        if key == "lp":
+            loss = LPRegionLoss(*value)
+        else:
+            raise ValueError("Invalid loss name in SynthesisRegionLoss: " + key)
+        # TODO: If needed, more loss classes can be introduced here later on.
+
+        if torch.cuda.is_available():
+            return loss.cuda()
+        else:
+            return loss
+
+    def forward(self, pred_img, gt_img, mask_lower_region, mask_higher_region):
+        results = self.normal(pred_img, gt_img)
+
+        for i, func in enumerate(self.losses):
+            # Evaluate each different loss function with the prediction and target and masks
+            out = func(pred_img, gt_img, mask_lower_region, mask_higher_region)
+
+            # Add the contribution by each loss to the total loss wrt their weights (lambda)
+            results["Total Loss"] += out["Total Loss"] * self.lambdas[i]
+
+            # Merge both dicts and store the resulting dict in results
+            results = dict(out, **results)
+
+        return results  # Contains individual losses and weighted sum of these
+
 class SynthesisLoss(nn.Module):
     """
     Class for simultaneous calculation of L1, content/perceptual losses.
@@ -38,6 +98,8 @@ class SynthesisLoss(nn.Module):
 
         if torch.cuda.is_available():
             return loss.cuda()
+        else:
+            return loss
 
     def forward(self, pred_img, gt_img):
         """
