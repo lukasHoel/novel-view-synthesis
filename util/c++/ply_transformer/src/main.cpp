@@ -20,8 +20,8 @@ int main(int argc, char** argv){
     happly::PLYData plyIn(argv[1]);
 
     // Get mesh-style data from the object
-    std::vector<std::array<double, 3>> vertices = plyIn.getVertexPositions();
-    std::vector<std::vector<size_t>> faces = plyIn.getFaceIndices<size_t>();
+    std::vector<std::array<float, 3>> vertices = plyIn.getVertexPositions<float>();
+    std::vector<std::vector<int>> faces = plyIn.getFaceIndices<int>();
     std::vector<std::array<unsigned char, 3>> colors = plyIn.getVertexColors();
 
     // Get object_id

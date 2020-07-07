@@ -1443,13 +1443,14 @@ public:
    *
    * @return A vector of vertex positions.
    */
-  std::vector<std::array<double, 3>> getVertexPositions(const std::string& vertexElementName = "vertex") {
+  template <class T>
+  std::vector<std::array<T, 3>> getVertexPositions(const std::string& vertexElementName = "vertex") {
 
-    std::vector<double> xPos = getElement(vertexElementName).getProperty<double>("x");
-    std::vector<double> yPos = getElement(vertexElementName).getProperty<double>("y");
-    std::vector<double> zPos = getElement(vertexElementName).getProperty<double>("z");
+    std::vector<T> xPos = getElement(vertexElementName).getProperty<T>("x");
+    std::vector<T> yPos = getElement(vertexElementName).getProperty<T>("y");
+    std::vector<T> zPos = getElement(vertexElementName).getProperty<T>("z");
 
-    std::vector<std::array<double, 3>> result(xPos.size());
+    std::vector<std::array<T, 3>> result(xPos.size());
     for (size_t i = 0; i < result.size(); i++) {
       result[i][0] = xPos[i];
       result[i][1] = yPos[i];
@@ -1510,7 +1511,8 @@ public:
    *
    * @param vertexPositions A vector of vertex positions
    */
-  void addVertexPositions(std::vector<std::array<double, 3>>& vertexPositions) {
+  template <typename T>
+  void addVertexPositions(std::vector<std::array<T, 3>>& vertexPositions) {
 
     std::string vertexName = "vertex";
     size_t N = vertexPositions.size();
@@ -1521,9 +1523,9 @@ public:
     }
 
     // De-interleave
-    std::vector<double> xPos(N);
-    std::vector<double> yPos(N);
-    std::vector<double> zPos(N);
+    std::vector<T> xPos(N);
+    std::vector<T> yPos(N);
+    std::vector<T> zPos(N);
     for (size_t i = 0; i < vertexPositions.size(); i++) {
       xPos[i] = vertexPositions[i][0];
       yPos[i] = vertexPositions[i][1];
@@ -1531,9 +1533,9 @@ public:
     }
 
     // Store
-    getElement(vertexName).addProperty<double>("x", xPos);
-    getElement(vertexName).addProperty<double>("y", yPos);
-    getElement(vertexName).addProperty<double>("z", zPos);
+    getElement(vertexName).addProperty<T>("x", xPos);
+    getElement(vertexName).addProperty<T>("y", yPos);
+    getElement(vertexName).addProperty<T>("z", zPos);
   }
 
   /**
