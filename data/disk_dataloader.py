@@ -20,7 +20,7 @@ class ClipDepth(object):
         self.maxDepth = maxDepth
 
     def __call__(self, sample):
-        sample[sample>self.maxDepth] = self.maxDepth
+        sample[sample > self.maxDepth] = self.maxDepth
         return sample
 
 
@@ -78,7 +78,15 @@ class DiskDataset(Dataset, ABC):
 
         # LOAD DATA
         dir_content = os.listdir(path)
-        self.img, self.depth, self.has_depth, self.depth_binary, self.has_binary_depth, self.cam, self.size, self.dynamics = self.load_data(dir_content)
+        self.img, \
+        self.depth, \
+        self.has_depth, \
+        self.depth_binary, \
+        self.has_binary_depth, \
+        self.cam, \
+        self.size, \
+        self.img_seg, \
+        self.dynamics = self.load_data(dir_content)
 
         # CREATE OUTPUT PAIR
         if self.sampleOutput:
@@ -87,8 +95,11 @@ class DiskDataset(Dataset, ABC):
         # SETUP EMPTY CACHE
         self.itemCache = [None for i in range(self.size)]
 
-    def load_image(self, idx):
-        return Image.open(os.path.join(self.path, self.img[idx]))
+    def load_image(self, idx, load_seg_image=False):
+        if load_seg_image:
+            return Image.open(os.path.join(self.path, self.img_seg[idx]))
+        else:
+            return Image.open(os.path.join(self.path, self.img[idx]))
 
     def load_depth(self, idx):
         if self.has_binary_depth:
@@ -97,7 +108,8 @@ class DiskDataset(Dataset, ABC):
         elif self.has_depth:
             with open(os.path.join(self.path, self.depth[idx])) as f:
                 depth = [float(i) for i in f.read().split(' ') if i.strip()]  # read .depth file
-                depth = np.asarray(depth, dtype=np.float32).reshape(self.imageInputShape)  # convert to same format as image HxW
+                depth = np.asarray(depth, dtype=np.float32).reshape(
+                    self.imageInputShape)  # convert to same format as image HxW
         else:
             return None
 
@@ -108,13 +120,14 @@ class DiskDataset(Dataset, ABC):
         if self.inverse_depth:
             depth = np.power(depth, -1)
 
-        return Image.fromarray(depth, mode='F') # return as float PIL Image
+        return Image.fromarray(depth, mode='F')  # return as float PIL Image
 
     def load_ext_cam(self, idx):
-        cam = {} # load the .txt file in this dict
+        cam = {}  # load the .txt file in this dict
         with open(os.path.join(self.path, self.cam[idx])) as f:
             for line in f:
-                m = re.match(DiskDataset.cam_pattern, line) # will match everything except angle, but that is not needed anyway
+                m = re.match(DiskDataset.cam_pattern,
+                             line)  # will match everything except angle, but that is not needed anyway
                 if m is not None:
                     cam[m["id"]] = np.zeros(3)
                     cam[m["id"]][0] = float(m["x"])
@@ -129,7 +142,7 @@ class DiskDataset(Dataset, ABC):
 
         # combine in correct shape
         RT = np.column_stack((x, y, z, cam["cam_pos"]))
-        RT = np.vstack([RT, [0,0,0,1]])
+        RT = np.vstack([RT, [0, 0, 0, 1]])
         RT = RT.astype(np.float32)
 
         # calculate RTinv from RT
@@ -141,32 +154,50 @@ class DiskDataset(Dataset, ABC):
 
         return RT, RTinv
 
-    def load_dynamics(self, image):
-        if self.dynamics is not None:
-            transformation = self.dynamics["transformation"]
-            transformation = np.asarray(transformation).reshape((3,4))
-            transformation = np.vstack([transformation, [0, 0, 0, 1]])
-            transformation = self.modify_dynamics_transformation(transformation).astype(np.float32)
+    def load_dynamics(self, input_image, output_image=None):
+        # load transformation
+        transformation = self.dynamics["transformation"]
+        transformation = np.asarray(transformation).reshape((3, 4))
+        transformation = np.vstack([transformation, [0, 0, 0, 1]])
+        transformation = self.modify_dynamics_transformation(transformation).astype(np.float32)
 
-            color = self.dynamics["color"]
-            color = np.asarray(color)
-            image = np.asarray(image) / 255.0
+        # load color of moved object in segmentation images (input and output have same color for that object)
+        color = self.dynamics["color"]
+        color = np.asarray(color)
 
-            mask = np.isclose(image, color)
-            mask = mask[:,:,0] & mask[:,:,1] & mask[:,:,2]
-            mask = Image.fromarray(mask)
+        # convert input and output images
+        input_image = np.asarray(input_image) / 255.0
+        if output_image is not None:
+            output_image = np.asarray(output_image) / 255.0
 
-            if self.transform:
-                mask = self.transform(mask).bool()
-                if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
-                    transformation = torchvision.transforms.ToTensor()(transformation)
+        # calculate input mask
+        input_mask = np.isclose(input_image, color)
+        input_mask = input_mask[:, :, 0] & input_mask[:, :, 1] & input_mask[:, :, 2]
+        input_mask = Image.fromarray(input_mask)
 
-            return {
-                "transformation": transformation,
-                "mask": mask
-            }
-        else:
-            return None
+        # calculate output mask
+        if output_image is not None:
+            output_mask = np.isclose(output_image, color)
+            output_mask = output_mask[:, :, 0] & output_mask[:, :, 1] & output_mask[:, :, 2]
+            output_mask = Image.fromarray(output_mask)
+
+        # apply transformation to masks
+        if self.transform:
+            input_mask = self.transform(input_mask).bool()
+            if output_image is not None:
+                output_mask = self.transform(output_mask).bool()
+            if isinstance(self.transform.transforms[-1], torchvision.transforms.ToTensor):
+                transformation = torchvision.transforms.ToTensor()(transformation)
+
+        result = {
+            "transformation": transformation,
+            "input_mask": input_mask,
+        }
+
+        if output_image is not None:
+            result["output_mask"] = output_mask
+
+        return result
 
     @abstractmethod
     def load_int_cam(self):
@@ -185,7 +216,7 @@ class DiskDataset(Dataset, ABC):
         """
         pass
 
-    #@abstractmethod
+    # @abstractmethod
     def modify_dynamics_transformation(self, transformation):
         """
         Calculates modifications necessary for concrete dataset after reading transformation from file.
@@ -205,11 +236,12 @@ class DiskDataset(Dataset, ABC):
             - has_binary_depth: if depth_binary list is empty or not
             - cam: list of all paths to extrinsic camera .txt files
             - size: how many data samples are available
+            - seg_img: list of all pahts to segmentation images. needed for calculating the mask dynamics.
             - dynamics: list of path to the .dynamics file. If list is None, then we do not have dynamics for this dataset available.
 
         :param dir_content: list of all files in the root path (self.path)
 
-        :return: tuple (img, depth, has_depth, depth_binary, has_binary_depth, cam, size, dynamics)
+        :return: tuple (img, depth, has_depth, depth_binary, has_binary_depth, cam, size, seg_img, dynamics)
         """
         pass
 
@@ -311,7 +343,14 @@ class DiskDataset(Dataset, ABC):
             }
 
         # LOAD DYNAMICS
-        dynamics = self.load_dynamics(image)
+        if self.dynamics is not None:
+            seg_image = self.load_image(idx, True)
+            if self.sampleOutput:
+                dynamics = self.load_dynamics(seg_image, output_image)
+            else:
+                dynamics = self.load_dynamics(seg_image, None)
+        else:
+            dynamics = None
 
         # CONSTRUCT SAMPLE
         sample = {

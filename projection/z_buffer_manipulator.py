@@ -105,7 +105,7 @@ class PtsManipulator(nn.Module):
         if dynamics is not None:
             bs = wrld_X.shape[0] # batch size
             transformation = dynamics["transformation"] # retrieve dynamic transformation from data
-            mask = dynamics["mask"].view(bs, -1) # retrieve mask from data and flatten because wrld_X is flattened, too.
+            mask = dynamics["input_mask"].view(bs, -1) # retrieve mask from data and flatten because wrld_X is flattened, too.
             #wrld_X[:, :, mask] = transformation.bmm(wrld_X[:, :, mask])
             # TODO how to vectorize this?
             for i in range(bs):
