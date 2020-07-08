@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import vgg19
 
+
 class LPRegionLoss(nn.Module):
     """
     Calculates the Lp loss for two images while weighting certain pixels in the images with a lower and higher weight.
@@ -61,18 +62,31 @@ class LPRegionLoss(nn.Module):
         loss = torch.mean(torch.abs(pred_img_weighted - gt_img_weighted)**self.p)
         return {"LPRegion": loss, "Total Loss": loss}
 
+
 class RegionSimilarityLoss(nn.Module):
     """
     Compares the mask of where an object was moved to during scene-editing with the gt mask where that object should be
-    moved to.
-    Counts how many pixels are not the same and divides through number of pixels in gt mask.
+    moved to: calculates inverse IntersectionOverUnion (IoU).
     This gives a "difference" score where 0<=d<=1 with 0: total similarity, masks are identical and 1: no similarity, masks are completely different
     Ideally, the masks would be identical giving us 0 different pixels (loss is 0 in that case).
     """
     def forward(self, pred_mask, gt_mask):
-        difference = torch.sum(pred_mask != gt_mask) / torch.sum(gt_mask, dtype=torch.float32)
-        return {"RegionSimilarity": difference, "Total Loss": difference}
+        iou = torch.sum(pred_mask * gt_mask) / torch.sum(gt_mask + pred_mask - gt_mask * pred_mask)
+        iou_inv = 1 - iou
 
+        '''
+        for i in range(gt_mask.shape[0]):
+            import matplotlib.pyplot as plt
+
+            plt.imshow(pred_mask[i].squeeze().cpu().detach().numpy())
+            plt.show()
+
+            plt.imshow(gt_mask[i].squeeze().cpu().detach().numpy().squeeze())
+            plt.show()
+        print(iou_inv)
+        '''
+
+        return {"RegionSimilarity": iou_inv, "Total Loss": iou_inv}
 
 
 class L1LossWrapper(nn.Module):
@@ -86,6 +100,7 @@ class L1LossWrapper(nn.Module):
         """
         err = F.l1_loss(pred_img, gt_img)
         return {"L1": err, "Total Loss": err}
+
 
 class VGG19(nn.Module):
     """Pretrained VGG19 architecture to be utilized in PerceptualLoss"""
@@ -124,6 +139,7 @@ class VGG19(nn.Module):
         # Intermediate results from different slices of layers are stored
         out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
         return out
+
 
 class PerceptualLoss(nn.Module):
     """

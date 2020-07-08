@@ -1,6 +1,7 @@
 from models.synthesis.losses import *
 from models.synthesis.metrics import *
 
+
 class SceneEditingAndSynthesisLoss(nn.Module):
     """
     Class for simultaneous calculation of SynthesisLoss and SceneEditingLoss.
@@ -24,6 +25,7 @@ class SceneEditingAndSynthesisLoss(nn.Module):
 
         return results
 
+
 class SceneEditingLoss(nn.Module):
     """
     Calculates the RegionSimilarityLoss and LPRegionLoss over the segmentation prediction at the given movement masks.
@@ -43,43 +45,44 @@ class SceneEditingLoss(nn.Module):
     def calculate_predicted_mask(self, pred_img, gt_img, gt_output_mask):
         # TODO how to vectorize this?
         bs = gt_output_mask.shape[0]
-        pred_output_mask = torch.zeros_like(gt_output_mask)
+        c = gt_img.shape[1]
+        color = torch.zeros(bs, c, 1, 1, device=gt_output_mask.get_device())
         for i in range(bs):
             # get the first position where mask is true (nonzero)
             # TODO support more than one color --> find all colors in gt_output_mask @ gt_img
             # TODO what if in gt image the color is not consistent as well e.g. due to downsampling + antialiasing???
-            color_index = torch.nonzero(gt_output_mask[i].squeeze(), as_tuple=False)[30]
+            color_index = torch.nonzero(gt_output_mask[i].squeeze(), as_tuple=False)[0] # TODO DEBUG: CHANGE BACK TO [0]
 
             # get the color from gt_img at that position
-            color = gt_img[i, :, color_index[0], color_index[1]].unsqueeze(1).unsqueeze(2)
+            color[i] = gt_img[i, :, color_index[0], color_index[1]].unsqueeze(1).unsqueeze(2)
 
-            # find all places where the color is equal in pred_img (comparison is per channel here)
-            # TODO add "nearest color" search if color is not exactly the same? Does this make sense. We could see it as punishment when color is not exactly similar?
-            # But we could use gradients when we search for exact same color and it is not exactly the same
-            # Also: Floating point precision???
-            color_channel_equal = torch.eq(pred_img[i], color)
+        # find all places where the color is equal in pred_img (comparison is per channel here)
+        # TODO add "nearest color" search if color is not exactly the same? Does this make sense. We could see it as punishment when color is not exactly similar?
+        # But we could use gradients when we search for exact same color and it is not exactly the same
+        # Also: Floating point precision???
+        color_equal_per_channel = torch.eq(pred_img, color) # TODO DEBUG: CHANGE BACK TO pred_img
 
-            # merge to final mask where all 3 color channels are indeed equal
-            color_equal = color_channel_equal[0] & color_channel_equal[1] & color_channel_equal[2]
+        # mulitply it here to still have gradients back to pred_img
+        pred_output_mask_per_channel = pred_img * color_equal_per_channel
 
-            # set this as mask for the i-th batch
-            pred_output_mask[i] = color_equal
+        # mulitply 3x boolean values. Will only be True, when all are True (is a differentiable way of doing bitwise_and)
+        pred_output_mask = (pred_output_mask_per_channel[:, 0] * pred_output_mask_per_channel[:, 1] * pred_output_mask_per_channel[:, 2]).unsqueeze(1)
 
-            '''
+        '''
+        for i in range(bs):
             import matplotlib.pyplot as plt
-            import numpy as np
             plt.imshow(pred_img[i].permute((1,2,0)).cpu().detach().numpy())
             plt.show()
 
             plt.imshow(gt_img[i].permute((1, 2, 0)).cpu().detach().numpy())
             plt.show()
 
-            plt.imshow(np.moveaxis(gt_output_mask[i].cpu().detach().numpy(), 0, -1).squeeze())
+            plt.imshow(gt_output_mask[i].squeeze().cpu().detach().numpy())
             plt.show()
 
-            plt.imshow(np.moveaxis(pred_output_mask[i].cpu().detach().numpy(), 0, -1).squeeze())
+            plt.imshow(pred_output_mask[i].squeeze().cpu().detach().numpy().squeeze())
             plt.show()
-            '''
+        '''
 
         return pred_output_mask
 
@@ -93,7 +96,7 @@ class SceneEditingLoss(nn.Module):
         # pass to lp region loss: lower_region is input mask and higher_region is merged_output_mask
         # (this is the convention of this loss) TODO makes this sense?
         # Alternative: higher region is merged_output_mask + input_mask, lower_region is rest of the image
-        merged_output_mask = (pred_output_mask == True) | (gt_output_mask == True)
+        merged_output_mask = (pred_output_mask > 0) | (gt_output_mask == True)
         region_lp = self.region_lp(pred_img, gt_img, input_mask, merged_output_mask)
 
         # create dict containing both results
@@ -101,6 +104,7 @@ class SceneEditingLoss(nn.Module):
         result["Total Loss"] = region_sim["Total Loss"] * self.lambdas[0] + region_lp["Total Loss"] * self.lambdas[1]
 
         return result
+
 
 class SynthesisLoss(nn.Module):
     """
@@ -162,20 +166,17 @@ class SynthesisLoss(nn.Module):
         """
 
         if self.ignore_at_scene_editing_masks:
+            pred_img = pred_img.clone()
+            gt_img = gt_img.clone()
+            pred_img *= ~input_mask
+            pred_img *= ~gt_output_mask
+            gt_img *= ~input_mask
+            gt_img *= ~gt_output_mask
+
+            '''
             bs = pred_img.shape[0]
-            # TODO how to vectorize this?
-            pred_img_masked = pred_img.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
             for i in range(bs):
-                in_mask = input_mask[i].squeeze()
-                out_mask = gt_output_mask[i].squeeze()
-                pred_img_masked[i, :, in_mask] = gt_img[i, :, in_mask]
-                pred_img_masked[i, :, out_mask] = gt_img[i, :, out_mask]
-
-                '''
                 import matplotlib.pyplot as plt
-                plt.imshow(pred_img_masked[i].permute((1, 2, 0)).cpu().detach().numpy())
-                plt.show()
-
                 plt.imshow(pred_img[i].permute((1, 2, 0)).cpu().detach().numpy())
                 plt.show()
 
@@ -186,7 +187,8 @@ class SynthesisLoss(nn.Module):
                 print("mask out")
                 plt.imshow(out_mask.cpu().detach().numpy())
                 plt.show()
-                '''
+            '''
+
 
         # Initialize output dict
         results = {"Total Loss": 0}
@@ -202,6 +204,7 @@ class SynthesisLoss(nn.Module):
             results = dict(out, **results) 
 
         return results # Contains individual losses and weighted sum of these
+
 
 class QualityMetrics(nn.Module):
     """
