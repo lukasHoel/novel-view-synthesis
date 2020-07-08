@@ -57,7 +57,7 @@ class SceneEditingLoss(nn.Module):
             # TODO add "nearest color" search if color is not exactly the same? Does this make sense. We could see it as punishment when color is not exactly similar?
             # But we could use gradients when we search for exact same color and it is not exactly the same
             # Also: Floating point precision???
-            color_channel_equal = torch.eq(gt_img[i], color)
+            color_channel_equal = torch.eq(pred_img[i], color)
 
             # merge to final mask where all 3 color channels are indeed equal
             color_equal = color_channel_equal[0] & color_channel_equal[1] & color_channel_equal[2]
