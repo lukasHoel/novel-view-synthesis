@@ -8,7 +8,7 @@
 int main(int argc, char** argv){
 
     if(argc != 3){
-        std::cerr << "Usage: " << argv[0] << " path/to/binary.ply output/path/binary_modified.ply" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " path/to/binary.ply output/path/" << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -32,8 +32,8 @@ int main(int argc, char** argv){
      *******************/
 
     // OPTION A: brute-force modify some vertices
-    int start = 0;
-    int end = 10000;
+    // int start = 0;
+    // int end = 10000;
 
     // for(int i=start; i<end; i++){
     //     vertices[i][0] += 1;
@@ -42,9 +42,9 @@ int main(int argc, char** argv){
     // }
 
     // OPTION B: modify all vertices that belong to faces with object_id <foo>
-    std::vector<int> object_ids_to_be_moved = {1, 3, 7, 10, 15, 19, 23, 26, 42, 47, 11}; // randomly chosen list of object_ids: I have no idea what these ids actually reference
+    std::vector<int> object_ids_to_be_moved = {12}; // randomly chosen list of object_ids: I have no idea what these ids actually reference
     std::map<int, bool> already_modified_vertices;
-    for(int i=0; i<faces.size(); i++){
+    for(unsigned int i=0; i<faces.size(); i++){
 
         // if the object id for this face is in the above list
         if(std::find(object_ids_to_be_moved.begin(), object_ids_to_be_moved.end(), object_ids[i]) != object_ids_to_be_moved.end()){
@@ -80,7 +80,17 @@ int main(int argc, char** argv){
     plyOut.getElement("face").addProperty<int>("object_id", object_ids);
 
     // Write the object to file
-    plyOut.write(argv[2], happly::DataFormat::Binary);
+    std::string filename(argv[1]);
+
+    int name_start = filename.find_last_of("/") + 1, name_end = filename.find_last_of("_") - 1;
+    std::string path_prefix(argv[2]);
+    std::string name(filename.substr(name_start, name_end - name_start + 1));
+    std::string name_prefix(path_prefix + "modified_" + name);
+
+    // WARNING: Filename has to end with "_semantic" suffix
+    plyOut.write(name_prefix + "_bin_semantic.ply", happly::DataFormat::Binary);
+    // ASCII PLY corresponding to the binary PLY generated for easy manipulation with blender
+    plyOut.write(name_prefix + "_ascii_semantic.ply", happly::DataFormat::ASCII);
 
     return EXIT_SUCCESS;
 }
