@@ -88,7 +88,6 @@ class RasterizePointsXYsBlending(nn.Module):
         #src = torch.cat((src, self.default_feature.repeat(bs, 1, 1)), 2)
 
         radius = float(self.radius) / float(image_size) * 2.0 # convert radius to fit the [-1,1] NDC ?? Or is this just arbitrary scaling s.t. radius as meaningful size?
-        params = compositing.CompositeParams(radius=radius)
 
         #print("Radius - before: {}, converted: {}".format(self.radius, radius))
 
@@ -120,22 +119,19 @@ class RasterizePointsXYsBlending(nn.Module):
             transformed_src_alphas = compositing.alpha_composite(
                 points_idx.permute(0, 3, 1, 2).long(),
                 alphas,
-                pts3D.features_packed().permute(1,0), # pts3D also contains features here, because this is now a Pointclouds object
-                params,
+                pts3D.features_packed().permute(1,0) # pts3D also contains features here, because this is now a Pointclouds object
             )
         elif self.accumulation == 'wsum':
             transformed_src_alphas = compositing.weighted_sum(
                 points_idx.permute(0, 3, 1, 2).long(),
                 alphas,
-                pts3D.features_packed().permute(1,0),
-                params,
+                pts3D.features_packed().permute(1,0)
             )
         elif self.accumulation == 'wsumnorm':
             transformed_src_alphas = compositing.weighted_sum_norm(
                 points_idx.permute(0, 3, 1, 2).long(),
                 alphas,
-                pts3D.features_packed().permute(1,0),
-                params,
+                pts3D.features_packed().permute(1,0)
             )
         else: raise NotImplementedError('Unsupported accumulation type: ' + self.accumulation)
 
