@@ -8,7 +8,7 @@ Usage info for blender 2.83.1
    3a) Click on "Scripting" (located in Header Bar)
    3b) Use Python console opened on the left
    3c) Import main.py:
-   	   import sys 
+       import sys 
        sys.path.append('/path/to/novel-view-synthesis/util/scripts/blender/')
        from main.py import *
 
