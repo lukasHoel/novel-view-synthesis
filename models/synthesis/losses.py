@@ -3,8 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import vgg19
 
-class LPRegionLoss(nn.Module):
 
+class LPRegionLoss(nn.Module):
+    """
+    Calculates the Lp loss for two images while weighting certain pixels in the images with a lower and higher weight.
+    These regions are defined during one call of the loss function.
+    The weights with that these regions should be weighed lower/higher are defined as hyperparameters.
+    The type of loss (p for Lp) is also a hyperparameter.
+    """
     def __init__(self, p=1, lower_weight = 0.0, higher_weight = 2.0):
         super().__init__()
         self.p = int(p)
@@ -14,21 +20,73 @@ class LPRegionLoss(nn.Module):
     def forward(self, pred_img, gt_img, mask_lower_region, mask_higher_region):
 
         # check if lower and higher region overlap. If so: truncate the lower region
-        overlap = mask_lower_region == mask_higher_region
+        overlap = (mask_lower_region == mask_higher_region)
+        mask_lower_region = mask_lower_region.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
         mask_lower_region[overlap] = False
 
-        # apply lower_weight to the lower_important region
-        pred_img[:, mask_lower_region] *= self.lower_weight
-        gt_img[:, mask_lower_region] *= self.lower_weight
+        # TODO how to vectorize this?
+        bs = pred_img.shape[0]
+        pred_img_weighted = pred_img.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
+        gt_img_weighted = gt_img.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
+        for i in range(bs):
+            # apply lower_weight to the lower_important region
+            mask_lower = mask_lower_region[i].squeeze()
+            pred_img_weighted[i, :, mask_lower] *= self.lower_weight
+            gt_img_weighted[i, :, mask_lower] *= self.lower_weight
 
-        # apply higher_weight to the higher_important region
-        pred_img[:, mask_higher_region] *= self.higher_weight
-        gt_img[:, mask_higher_region] *= self.higher_weight
+            # apply higher_weight to the higher_important region
+            mask_higher = mask_higher_region[i].squeeze()
+            pred_img_weighted[i, :, mask_higher] *= self.higher_weight
+            gt_img_weighted[i, :, mask_higher] *= self.higher_weight
+
+            '''
+            import matplotlib.pyplot as plt
+            print("pred img weighted")
+            plt.imshow(pred_img_weighted[i].permute((1,2,0)).cpu().detach().numpy())
+            plt.show()
+
+            print("gt img weighted")
+            plt.imshow(gt_img_weighted[i].permute((1, 2, 0)).cpu().detach().numpy())
+            plt.show()
+
+            print("mask lower")
+            plt.imshow(mask_lower.cpu().detach().numpy())
+            plt.show()
+
+            print("mask higher")
+            plt.imshow(mask_higher.cpu().detach().numpy())
+            plt.show()
+            '''
 
         # calculate lp loss
-        loss = torch.mean((pred_img - gt_img)**self.p)
+        loss = torch.mean(torch.abs(pred_img_weighted - gt_img_weighted)**self.p)
         return {"LPRegion": loss, "Total Loss": loss}
 
+
+class RegionSimilarityLoss(nn.Module):
+    """
+    Compares the mask of where an object was moved to during scene-editing with the gt mask where that object should be
+    moved to: calculates inverse IntersectionOverUnion (IoU).
+    This gives a "difference" score where 0<=d<=1 with 0: total similarity, masks are identical and 1: no similarity, masks are completely different
+    Ideally, the masks would be identical giving us 0 different pixels (loss is 0 in that case).
+    """
+    def forward(self, pred_mask, gt_mask):
+        iou = torch.sum(pred_mask * gt_mask) / torch.sum(gt_mask + pred_mask - gt_mask * pred_mask)
+        iou_inv = 1 - iou
+
+        '''
+        for i in range(gt_mask.shape[0]):
+            import matplotlib.pyplot as plt
+
+            plt.imshow(pred_mask[i].squeeze().cpu().detach().numpy())
+            plt.show()
+
+            plt.imshow(gt_mask[i].squeeze().cpu().detach().numpy().squeeze())
+            plt.show()
+        print(iou_inv)
+        '''
+
+        return {"RegionSimilarity": iou_inv, "Total Loss": iou_inv}
 
 
 class L1LossWrapper(nn.Module):
@@ -42,6 +100,7 @@ class L1LossWrapper(nn.Module):
         """
         err = F.l1_loss(pred_img, gt_img)
         return {"L1": err, "Total Loss": err}
+
 
 class VGG19(nn.Module):
     """Pretrained VGG19 architecture to be utilized in PerceptualLoss"""
@@ -80,6 +139,7 @@ class VGG19(nn.Module):
         # Intermediate results from different slices of layers are stored
         out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
         return out
+
 
 class PerceptualLoss(nn.Module):
     """

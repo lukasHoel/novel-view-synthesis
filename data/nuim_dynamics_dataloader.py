@@ -181,7 +181,7 @@ def test():
     ])
 
     dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003",
-                             input_as_segmentation=False,
+                             input_as_segmentation=True,
                              sampleOutput=True,
                              output_from_other_view=False,
                              inverse_depth=False,

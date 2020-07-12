@@ -277,8 +277,9 @@ class NVS_Solver(object):
 
         batch = to_cuda(self.batch_loader(batch))
         output = model(*batch)
+        dynamics = batch[-1]
 
-        loss_dir = self.loss_func(output['PredImg'], output['OutputImg'])
+        loss_dir = self.loss_func(output['PredImg'], output['OutputImg'], dynamics["input_mask"], dynamics["output_mask"])
         acc_dir = None
         if self.acc_func is not None:
             acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
