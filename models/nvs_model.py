@@ -4,7 +4,7 @@ import torch.nn as nn
 from models.enc_dec.feature_network import FeatureNet
 from models.enc_dec.depth_network import Unet
 from projection.z_buffer_manipulator import PtsManipulator
-from models.enc_dec.refinement_network import RefineNet
+from models.enc_dec.refinement_network import AdaptivSegNet
 
 class NovelViewSynthesisModel(nn.Module):
     def __init__(self,
@@ -24,6 +24,9 @@ class NovelViewSynthesisModel(nn.Module):
                  #dec
                  dec_dims=[32, 64, 32, 16, 3],
                  dec_blk_types=["id", "avg", "ups", "id"],
+                 seg_dims=[64, 1],
+                 seg_blk_types=["id"],
+                 shared_layers=0,
                  dec_activation_func=nn.Sigmoid(),
                  dec_noisy_bn=True,
                  dec_spectral_norm=True,
@@ -60,6 +63,9 @@ class NovelViewSynthesisModel(nn.Module):
 
         self.dec_dims = dec_dims
         self.dec_blk_types = dec_blk_types
+        self.seg_dims = seg_dims
+        self.seg_blk_types = seg_blk_types
+        self.shared_layers = shared_layers
         self.dec_activation_func = dec_activation_func
         self.dec_noisy_bn = dec_noisy_bn
         self.dec_spectral_norm = dec_spectral_norm
@@ -121,8 +127,11 @@ class NovelViewSynthesisModel(nn.Module):
             self.dec_dims[0] = 3
             self.dec_dims[-1] = 3
 
-        self.projector = RefineNet(res_block_dims=self.dec_dims,
-                                   res_block_types=self.dec_blk_types,
+        self.projector = AdaptivSegNet(ref_block_dims=self.dec_dims,
+                                   ref_block_types=self.dec_blk_types,
+                                   seg_block_dims=self.seg_dims,
+                                   seg_block_types=self.seg_blk_types,
+                                   shared_layers=self.shared_layers,
                                    activate_out=self.dec_activation_func,
                                    noisy_bn=self.dec_noisy_bn,
                                    spectral_norm=self.dec_spectral_norm)
@@ -196,7 +205,7 @@ class NovelViewSynthesisModel(nn.Module):
         '''
 
         # DECODE IMAGE
-        transformed_img = self.projector(transformed_img_features)
+        transformed_img, transformed_seg = self.projector(transformed_img_features)
         #transformed_img = transformed_img_features # use this when refinement network should not be used
         #print(transformed_img.shape)
         #print(torch.min(transformed_img))
@@ -214,6 +223,7 @@ class NovelViewSynthesisModel(nn.Module):
             "InputImg": input_img,
             "OutputImg": gt_img,
             "PredImg": transformed_img,
+            "PredSeg": transformed_seg,
             "PredDepth": regressed_pts,
             "InputDepth": depth_img
         }
