@@ -10,7 +10,7 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
 
     def __init__(self,
                  path,
-                 input_as_segmentation=True,
+                 input_as_segmentation=False,
                  sampleOutput=True,
                  output_from_other_view=False,
                  inverse_depth=False,
@@ -181,7 +181,7 @@ def test():
     ])
 
     dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003",
-                             input_as_segmentation=True,
+                             input_as_segmentation=False,
                              sampleOutput=True,
                              output_from_other_view=True,
                              inverse_depth=False,
