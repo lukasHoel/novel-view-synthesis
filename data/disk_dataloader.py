@@ -38,6 +38,7 @@ class DiskDataset(Dataset, ABC):
                  maxDepth,
                  imageInputShape,
                  sampleOutput=True,
+                 input_as_segmentation=False,
                  inverse_depth=False,
                  cacheItems=False,
                  transform=None):
@@ -59,6 +60,7 @@ class DiskDataset(Dataset, ABC):
         self.path = path
         self.sampleOutput = sampleOutput
         self.cacheItems = cacheItems
+        self.input_as_segmentation = input_as_segmentation
 
         # SAVE TRANSFORM OBJECT IN CLASS
         self.transform = transform
@@ -78,14 +80,14 @@ class DiskDataset(Dataset, ABC):
 
         # LOAD DATA
         dir_content = os.listdir(path)
-        self.img, \
+        self.img_rgb, \
+        self.img_seg, \
         self.depth, \
         self.has_depth, \
         self.depth_binary, \
         self.has_binary_depth, \
         self.cam, \
         self.size, \
-        self.img_seg, \
         self.dynamics = self.load_data(dir_content)
 
         # CREATE OUTPUT PAIR
@@ -99,7 +101,7 @@ class DiskDataset(Dataset, ABC):
         if load_seg_image:
             return Image.open(os.path.join(self.path, self.img_seg[idx]))
         else:
-            return Image.open(os.path.join(self.path, self.img[idx]))
+            return Image.open(os.path.join(self.path, self.img_rgb[idx]))
 
     def load_depth(self, idx):
         if self.has_binary_depth:
@@ -306,7 +308,7 @@ class DiskDataset(Dataset, ABC):
             return self.itemCache[idx]
 
         # LOAD INPUT IMAGE
-        image = self.load_image(idx)
+        image = self.load_image(idx, self.input_as_segmentation)
 
         # LOAD INPUT DEPTH
         depth = self.load_depth(idx)
@@ -327,7 +329,11 @@ class DiskDataset(Dataset, ABC):
             output_idx = self.inputToOutputIndex[idx]
 
             # load image and depth of new index
-            output_image = self.load_image(output_idx)
+            output_image_rgb = self.load_image(output_idx, False)
+            if self.img_seg is not None:
+                output_image_seg = self.load_image(output_idx, True)
+            else:
+                output_image_seg = None
             output_depth = self.load_depth(output_idx)
 
             # load cam of new index
@@ -337,7 +343,8 @@ class DiskDataset(Dataset, ABC):
             cam['RT2inv'] = RT2inv
 
             output = {
-                'image': output_image,
+                'image': output_image_rgb,
+                'seg': output_image_seg,
                 'depth': output_depth,
                 'idx': output_idx
             }
@@ -346,7 +353,7 @@ class DiskDataset(Dataset, ABC):
         if self.dynamics is not None:
             seg_image = self.load_image(idx, True)
             if self.sampleOutput:
-                dynamics = self.load_dynamics(seg_image, output_image)
+                dynamics = self.load_dynamics(seg_image, output_image_seg)
             else:
                 dynamics = self.load_dynamics(seg_image, None)
         else:
@@ -369,6 +376,8 @@ class DiskDataset(Dataset, ABC):
 
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
+                if sample['output']['seg'] is not None:
+                    sample['output']['seg'] = self.transform(sample['output']['seg'])
                 if sample['output']['depth'] is not None:
                     sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
 

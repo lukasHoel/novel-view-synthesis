@@ -40,6 +40,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
                  in_size,
                  sampleOutput=True,
                  inverse_depth=False,
+                 input_as_segmentation=False,
                  cacheItems=False,
                  transform=None):
         '''
@@ -56,6 +57,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
                              maxDepth=MP3D_Habitat_Offline_Dataset.max_depth,
                              imageInputShape=(in_size, in_size),
                              sampleOutput=sampleOutput,
+                             input_as_segmentation=input_as_segmentation,
                              inverse_depth=inverse_depth,
                              cacheItems=cacheItems,
                              transform=transform)
@@ -105,7 +107,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
             print("number of camera .txt with _0 ({}) and _1 ({}) identical".format(len(cam), len(out_cam)))
             cam.extend(out_cam)
 
-        return img, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None, None
+        return img, None, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None
 
     def modify_depth(self, depth):
         return depth # nothing to do here

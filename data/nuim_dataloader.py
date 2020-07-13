@@ -42,6 +42,7 @@ class ICLNUIMDataset(DiskDataset):
                  path,
                  sampleOutput=True,
                  inverse_depth=False,
+                 input_as_segmentation=False,
                  cacheItems=False,
                  transform=None,
                  out_shape=(480,640)):
@@ -64,6 +65,7 @@ class ICLNUIMDataset(DiskDataset):
                              imageInputShape=ICLNUIMDataset.image_shape,
                              sampleOutput=sampleOutput,
                              inverse_depth=inverse_depth,
+                             input_as_segmentation=input_as_segmentation,
                              cacheItems=cacheItems,
                              transform=transform)
 
@@ -119,13 +121,14 @@ class ICLNUIMDataset(DiskDataset):
 
     def load_data(self, dir_content):
         img = sorted([f for f in dir_content if f.endswith('.png') and not f.endswith('.seg.png')])
+        img_seg = sorted([f for f in dir_content if f.endswith('.seg.png')])
         depth = sorted([f for f in dir_content if f.endswith('.depth') and not f.endswith('.gl.depth')])
         has_depth = len(depth) > 0
         depth_binary = sorted([f for f in dir_content if f.endswith('.depth.npy') and not f.endswith('.gl.depth.npy')])
         has_binary_depth = len(depth_binary) > 0
         cam = sorted([f for f in dir_content if f.endswith('.txt')])
 
-        return img, depth, has_depth, depth_binary, has_binary_depth, cam, len(img), None, None
+        return img, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, len(img), None
 
 
 def getEulerAngles(R):
@@ -185,16 +188,20 @@ def test():
     img = np.moveaxis(item['image'].numpy(), 0, -1)
     depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
+    out_seg = np.moveaxis(item['output']['seg'].numpy(), 0, -1)
     out_idx = item['output']['idx']
-    fig.add_subplot(1, 3, 1)
+    fig.add_subplot(1, 4, 1)
     plt.title("Image")
     plt.imshow(img)
-    fig.add_subplot(1, 3, 2)
+    fig.add_subplot(1, 4, 2)
     plt.title("Depth Map")
     plt.imshow(depth, cmap='gray')
-    fig.add_subplot(1, 3, 3)
+    fig.add_subplot(1, 4, 3)
     plt.title("Output Image " + str(out_idx))
     plt.imshow(out_img)
+    fig.add_subplot(1, 4, 4)
+    plt.title("Output Seg " + str(out_idx))
+    plt.imshow(out_seg)
 
     plt.show()
 

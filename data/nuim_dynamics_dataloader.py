@@ -18,12 +18,12 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
                  transform=None,
                  out_shape=(480,640)):
         self.output_from_other_view = output_from_other_view
-        self.input_as_segmentation = input_as_segmentation
 
         ICLNUIMDataset.__init__(self,
                              path=path,
                              sampleOutput=sampleOutput,
                              inverse_depth=inverse_depth,
+                             input_as_segmentation=input_as_segmentation,
                              cacheItems=cacheItems,
                              transform=transform,
                              out_shape=out_shape)
@@ -37,15 +37,13 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
 
         # load originals
         img_seg = sorted([os.path.join("original", f) for f in os.listdir(os.path.join(self.path, "original")) if f.endswith(".seg.png")])
-        if self.input_as_segmentation:
-            # segmentation images are also the ones that should be used as input in the dataset samples
-            img = img_seg
-        else:
-            # segmentation images are only needed for calculating dynamic mask. The input images should be the rgb images.
-            img = sorted([os.path.join("original", f) for f in os.listdir(os.path.join(self.path, "original")) if f.endswith(".png") and not f.endswith(".seg.png")])
+        img_rgb = sorted([os.path.join("original", f) for f in os.listdir(os.path.join(self.path, "original")) if f.endswith(".png") and not f.endswith(".seg.png")])
+
+        if len(img_seg) != len(img_rgb):
+            raise ValueError(f"Number of rgb images ({len(img_rgb)}) != Number of seg images ({len(img_seg)})")
 
         cam = sorted([os.path.join("original", f) for f in os.listdir(os.path.join(self.path, "original")) if f.endswith(".txt")])
-        size = len(img)
+        size = len(img_seg)
         depth = sorted([os.path.join("original", f) for f in os.listdir(os.path.join(self.path, "original")) if f.endswith('.gl.depth')])
         has_depth = len(depth) > 0
         depth_binary = sorted([os.path.join("original", f) for f in os.listdir(os.path.join(self.path, "original")) if f.endswith('.gl.depth.npy')])
@@ -53,11 +51,10 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
 
         # load moved img
         moved_img = sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if f.endswith(".seg.png")])
-        if len(moved_img) != len(img):
-            raise ValueError("number of .png files in 'original' ({}) and 'moved' ({}) not identical".format(len(img), len(moved_img)))
+        if len(moved_img) != len(img_seg):
+            raise ValueError("number of .seg.png files in 'original' ({}) and 'moved' ({}) not identical".format(len(img_seg), len(moved_img)))
         else:
-            img.extend(moved_img)
-            img.extend(moved_img)
+            img_seg.extend(moved_img)
 
         # load moved depth and depth.npy
         moved_depth = sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if f.endswith('.gl.depth')])
@@ -72,6 +69,9 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
         else:
             depth_binary.extend(moved_depth_binary)
 
+        # duplicate rgb image as "moved": to have equal amount of list sizes
+        img_rgb.extend(img_rgb.copy())
+
         # load moved cam: duplicate original cams
         cam.extend(cam.copy())
 
@@ -81,7 +81,7 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
             dynamics = json.load(f)
             dynamics = dynamics[0] # TODO SUPPORT MULTIPLE TRANSFORMATIONS IN ONE JSON
 
-        return img, depth, has_depth, depth_binary, has_binary_depth, cam, size, img_seg, dynamics
+        return img_rgb, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, size, dynamics
 
     def modify_dynamics_transformation(self, transformation):
         """
@@ -105,7 +105,7 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
         return transformation
 
     def create_input_to_output_sample_map(self):
-        # since we have all originals followed by all moved in the self.img list and size == len(originals), we get the associated moved file from the original file by adding an index of size
+        # since we have all originals followed by all moved in the self.img_seg list and size == len(originals), we get the associated moved file from the original file by adding an index of size
         if not self.output_from_other_view:
             # just return moved image from same camera
             return [idx + self.size for idx in range(self.size)]
@@ -183,7 +183,7 @@ def test():
     dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003",
                              input_as_segmentation=True,
                              sampleOutput=True,
-                             output_from_other_view=False,
+                             output_from_other_view=True,
                              inverse_depth=False,
                              cacheItems=False,
                              transform=transform)
@@ -192,7 +192,7 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    i = 0
+    i = 10
     item = dataset.__getitem__(i)
 
     print(item["image"].shape)
@@ -220,37 +220,46 @@ def test():
 
     img = np.moveaxis(item['image'].numpy(), 0, -1)
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
+    out_seg = np.moveaxis(item['output']['seg'].numpy(), 0, -1)
     out_idx = item['output']['idx']
 
     depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
-    print("MIN DEPTH", np.min(depth))
-    print("MAX DEPTH", np.max(depth))
+    depth_out = np.moveaxis(item['output']['depth'].numpy(), 0, -1).squeeze()
 
-    fig.add_subplot(1, 5, 1)
+    fig.add_subplot(1, 7, 1)
     plt.title("Image")
     plt.imshow(img)
 
-    fig.add_subplot(1, 5, 2)
+    fig.add_subplot(1, 7, 2)
     plt.title("Output Image " + str(out_idx))
     plt.imshow(out_img)
 
-    fig.add_subplot(1, 5, 3)
+    fig.add_subplot(1, 7, 3)
+    plt.title("Output Seg " + str(out_idx))
+    plt.imshow(out_seg)
+
+    fig.add_subplot(1, 7, 4)
     plt.title("Mask dynamics at input")
     img[:,:] = np.array([0, 0, 0])
     mask = np.moveaxis(item["dynamics"]["input_mask"].numpy(), 0, -1).squeeze()
     img[mask == 1] = np.array([1, 1, 1])
     plt.imshow(img)
 
-    fig.add_subplot(1, 5, 4)
+    fig.add_subplot(1, 7, 5)
     plt.title("Mask dynamics at output")
     img[:, :] = np.array([0, 0, 0])
     mask = np.moveaxis(item["dynamics"]["output_mask"].numpy(), 0, -1).squeeze()
     img[mask == 1] = np.array([1, 1, 1])
     plt.imshow(img)
 
-    fig.add_subplot(1, 5, 5)
+    fig.add_subplot(1, 7, 6)
     plt.title("Input Depth Map")
     plt.imshow(depth)
+
+    fig.add_subplot(1, 7, 7)
+    plt.title("Output Depth Map")
+    plt.imshow(depth_out)
+
     plt.show()
 
 if __name__ == "__main__":
