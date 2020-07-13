@@ -249,7 +249,7 @@ class GAN_Wrapper_Solver(object):
                 train_accs.append(train_acc)
 
                 # Print loss every log_nth iteration
-                if log_nth_iter != 0 and i % log_nth_iter == 0:
+                if log_nth_iter != 0 and (i+1) % log_nth_iter == 0:
                     print("[Iteration {cur}/{max}] TRAIN loss: {loss}".format(cur=i + 1,
                                                                               max=iter_per_epoch,
                                                                               loss=train_loss))
@@ -262,7 +262,7 @@ class GAN_Wrapper_Solver(object):
             mean_train_loss = np.mean(train_losses)
             mean_train_acc = np.mean(train_accs)
 
-            if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+            if log_nth_epoch != 0 and (epoch+1) % log_nth_epoch == 0:
                 print("[EPOCH {cur}/{max}] TRAIN mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
                                                                                      max=num_epochs,
                                                                                      acc=mean_train_acc,
@@ -288,7 +288,7 @@ class GAN_Wrapper_Solver(object):
                         val_accs.append(val_acc)
 
                         # Print loss every log_nth iteration
-                        if log_nth_iter != 0 and i % log_nth_iter == 0:
+                        if log_nth_iter != 0 and (i+1) % log_nth_iter == 0:
                             print("[Iteration {cur}/{max}] Val loss: {loss}".format(cur=i + 1,
                                                                                     max=len(val_loader),
                                                                                     loss=val_loss))
@@ -297,7 +297,7 @@ class GAN_Wrapper_Solver(object):
                     mean_val_loss = np.mean(val_losses)
                     mean_val_acc = np.mean(val_accs)
 
-                    if log_nth_epoch != 0 and epoch % log_nth_epoch == 0:
+                    if log_nth_epoch != 0 and (epoch+1) % log_nth_epoch == 0:
                         print("[EPOCH {cur}/{max}] VAL mean acc/loss: {acc}/{loss}".format(cur=epoch + 1,
                                                                                            max=num_epochs,
                                                                                            acc=mean_val_acc,

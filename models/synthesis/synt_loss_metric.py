@@ -70,6 +70,8 @@ class SceneEditingLoss(nn.Module):
         self.weight = weight
         self.region_lp = LPRegionLoss(*lpregion_params)
 
+        print("Loss {} with weight {} and params {}".format(type(self.region_lp).__name__, self.weight, lpregion_params))
+
         if torch.cuda.is_available():
             self.region_lp = self.region_lp.cuda()
 
@@ -129,6 +131,115 @@ class SceneEditingLoss(nn.Module):
         region_lp["Total Loss"] = region_lp["Total Loss"] * self.weight
 
         return region_lp, pred_output_mask
+
+
+class MovementConsistencyLoss(nn.Module):
+    """
+    Class for simultaneous calculation of L1, content/perceptual losses.
+    Compares output rgb image at output mask with input rgb image at input mask.
+
+    Semantics: A table that was moved from A to B should still have similar colors at position B as at position A.
+    """
+
+    def __init__(self, losses=['1.0_l1', '10.0_content']):
+        """
+        :param losses:
+            loss specification, str of the form: 'lambda_loss'
+            lambda is used to weight different losses
+            l1 and content/perceptual losses are summed if both are specified
+            used in the forward method
+
+        :param ignore_at_scene_editing_masks:
+            If true, we do not calculate the loss for the input and output mask of scene editing movements.
+            We do this by setting the pred_img equal to the gt_img at these mask positions, s.t. the loss will be 0 at these locations.
+            If false (default), we calculate the losses over the whole image as it is and we ignore the masks.
+        """
+
+        super().__init__()
+
+        lambdas, loss_names = zip(
+            *[loss_name.split("_") for loss_name in losses])  # Parse lambda and loss_names from str
+        print("Loss names:", loss_names)
+        print("Weight of each loss:", lambdas)
+        lambdas = [float(l) for l in lambdas]  # [str] -> [float]
+
+        self.lambdas = lambdas
+        self.losses = nn.ModuleList(
+            [self.get_loss_from_name(loss_name) for loss_name in loss_names]
+        )
+
+    def get_loss_from_name(self, name):
+        if name == "l1":
+            loss = L1LossWrapper()
+        elif name == "content":
+            loss = PerceptualLoss()
+        else:
+            raise ValueError("Invalid loss name in SynthesisLoss: " + name)
+        # TODO: If needed, more loss classes can be introduced here later on.
+
+        if torch.cuda.is_available():
+            return loss.cuda()
+        else:
+            return loss
+
+    def forward(self, pred_img, input_img, pred_output_mask, input_mask):
+
+        pred_img = pred_img.clone()
+        input_img = input_img.clone()
+
+        # TODO how to vectorize this?
+
+        # img is in format (bs, c, h, w)
+        # mask is in format (bs, 1, h, w)
+        # In order to use this in one vectorized call we do:
+        # mask.squeeze() --> (bs, h, w)
+        # img.permute(0,2,3,1) --> (bs, h, w, c)
+        # img[mask, :] now accesses the masked pixels at every channel
+
+        pred_img = pred_img.permute(0,2,3,1)
+        input_img = input_img.permute(0,2,3,1)
+
+        pred_img = pred_img[pred_output_mask.squeeze(), :]
+        input_img = input_img[input_mask.squeeze(), :]
+
+        pred_img = pred_img.permute(0, 3, 1, 2)
+        input_img = input_img.permute(0, 3, 1, 2)
+
+        # TODO must reshape in same size...
+
+        '''
+        bs = pred_img.shape[0]
+        for i in range(bs):
+            import matplotlib.pyplot as plt
+            plt.imshow(pred_img[i].permute((1, 2, 0)).cpu().detach().numpy())
+            plt.show()
+            
+            plt.imshow(input_img[i].permute((1, 2, 0)).cpu().detach().numpy())
+            plt.show()
+
+            print("mask in")
+            plt.imshow(input_mask.cpu().detach().numpy())
+            plt.show()
+
+            print("mask out")
+            plt.imshow(pred_output_mask.cpu().detach().numpy())
+            plt.show()
+        '''
+
+        # Initialize output dict
+        results = {"Total Loss": 0}
+
+        for i, func in enumerate(self.losses):
+            # Evaluate each different loss (L1, Content/Perceptual) function with the prediction and target
+            out = func(pred_img, input_img)
+
+            # Add the contribution by each loss to the total loss wrt their weights (lambda)
+            results["Total Loss"] += out["Total Loss"] * self.lambdas[i]
+
+            # Merge both dicts and store the resulting dict in results
+            results = dict(out, **results)
+
+        return results  # Contains individual losses and weighted sum of these
 
 
 class SynthesisLoss(nn.Module):
