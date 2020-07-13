@@ -11,7 +11,7 @@ class LPRegionLoss(nn.Module):
     The weights with that these regions should be weighed lower/higher are defined as hyperparameters.
     The type of loss (p for Lp) is also a hyperparameter.
     """
-    def __init__(self, p=1, lower_weight = 0.0, higher_weight = 2.0):
+    def __init__(self, p=1, lower_weight = 1.0, higher_weight = 3.0):
         super().__init__()
         self.p = int(p)
         self.lower_weight = lower_weight
@@ -61,33 +61,6 @@ class LPRegionLoss(nn.Module):
         # calculate lp loss
         loss = torch.mean(torch.abs(pred_img_weighted - gt_img_weighted)**self.p)
         return {"LPRegion": loss, "Total Loss": loss}
-
-
-class RegionSimilarityLoss(nn.Module):
-    """
-    Compares the mask of where an object was moved to during scene-editing with the gt mask where that object should be
-    moved to: calculates inverse IntersectionOverUnion (IoU).
-    This gives a "difference" score where 0<=d<=1 with 0: total similarity, masks are identical and 1: no similarity, masks are completely different
-    Ideally, the masks would be identical giving us 0 different pixels (loss is 0 in that case).
-    """
-    def forward(self, pred_mask, gt_mask):
-        iou = torch.sum(pred_mask * gt_mask) / torch.sum(gt_mask + pred_mask - gt_mask * pred_mask)
-        iou_inv = 1 - iou
-
-        '''
-        for i in range(gt_mask.shape[0]):
-            import matplotlib.pyplot as plt
-
-            plt.imshow(pred_mask[i].squeeze().cpu().detach().numpy())
-            plt.show()
-
-            plt.imshow(gt_mask[i].squeeze().cpu().detach().numpy().squeeze())
-            plt.show()
-        print(iou_inv)
-        '''
-
-        return {"RegionSimilarity": iou_inv, "Total Loss": iou_inv}
-
 
 class L1LossWrapper(nn.Module):
     """Wrapper of the L1Loss so that the format matches what is expected"""

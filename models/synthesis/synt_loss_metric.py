@@ -2,50 +2,81 @@ from models.synthesis.losses import *
 from models.synthesis.metrics import *
 
 
-class SceneEditingAndSynthesisLoss(nn.Module):
+class SynthesisLossRGBandSeg(nn.Module):
     """
-    Class for simultaneous calculation of SynthesisLoss and SceneEditingLoss.
+    Class for simultaneous calculation of SynthesisLoss on RGB and SEG predictions.
+    Can be used for pretraining the (rgb + seg) refinement network on only static cases.
     """
     def __init__(self,
-                 synthesis_losses=['1.0_l1', '10.0_content'],
-                 synthesis_ignore_at_scene_editing_masks = True,
-                 scene_editing_lambdas=[1.0, 1.0],
-                 scene_editing_lpregion_params=[1.0, 0.0, 2.0]):
+                 rgb_losses=['1.0_l1', '10.0_content'],
+                 seg_losses=['1.0_l1', '10.0_content']):
         super().__init__()
 
-        self.synthesis_loss = SynthesisLoss(synthesis_losses, synthesis_ignore_at_scene_editing_masks)
-        self.scene_editing_loss = SceneEditingLoss(scene_editing_lambdas, scene_editing_lpregion_params)
+        self.rgb_loss = SynthesisLoss(rgb_losses)
+        self.seg_loss = SynthesisLoss(seg_losses)
 
-    def forward(self, pred_img, gt_img, input_mask, gt_output_mask):
-        synthesis_results = self.synthesis_loss(pred_img, gt_img, input_mask, gt_output_mask)
-        scene_editing_results = self.scene_editing_loss(pred_img, gt_img, input_mask, gt_output_mask)
+    def forward(self, pred_img, gt_img, pred_seg, gt_seg, input_mask=None, gt_output_mask=None):
 
-        results = {**synthesis_results, **scene_editing_results}
-        results["Total Loss"] = synthesis_results["Total Loss"] + scene_editing_results["Total Loss"]
+        if input_mask is not None or gt_output_mask is not None:
+            raise ValueError(f"You provided dynamic masks to the SynthesisLoss meant for static training. Either remove the dynamic masks from the call or use a loss that can handle dynamic masks.")
+
+        rgb_results = self.rgb_loss(pred_img, gt_img)
+        seg_results = self.seg_loss(pred_seg, gt_seg)
+
+        # sum up rgb and seg results without additional weighting.
+        # rgb and seg share the same keys as they come from the same class
+        results = {key: rgb_results[key] + seg_results[key] for key in rgb_results.keys()}
 
         return results
 
 
-class SceneEditingLoss(nn.Module):
+class SceneEditingAndSynthesisLoss(nn.Module):
     """
-    Calculates the RegionSimilarityLoss and LPRegionLoss over the segmentation prediction at the given movement masks.
-    """
+    Class for simultaneous calculation of SynthesisLoss and SceneEditingLoss.
 
-    def __init__(self, lambdas=[1.0, 1.0], lpregion_params=[1.0, 0.0, 2.0]):
+    It calculates the SynthesisLoss for the rgb image prediction in comparison with the gt rgb image.
+    Since we do not have gt rgb image with movements, we only compare with the (static, non-moved) gt rgb image at the
+    regions in the image that contain no movement (e.g. input and gt dynamics mask gets not compared).
+
+    It calculates the SceneEditingLoss for the seg image prediction in comparison with the gt seg image.
+    """
+    def __init__(self,
+                 synthesis_losses=['1.0_l1', '10.0_content'],
+                 scene_editing_weight=1.0,
+                 scene_editing_lpregion_params=[1.0, 1.0, 3.0]):
         super().__init__()
 
-        self.lambdas = lambdas
-        self.region_similarity = RegionSimilarityLoss()
+        self.synthesis_loss = SynthesisLoss(synthesis_losses, True)
+        self.scene_editing_loss = SceneEditingLoss(scene_editing_weight, scene_editing_lpregion_params)
+
+    def forward(self, pred_img, gt_img, pred_seg, gt_seg, input_mask, gt_output_mask):
+        synthesis_results = self.synthesis_loss(pred_img, gt_img, input_mask, gt_output_mask)
+        scene_editing_results, pred_output_mask = self.scene_editing_loss(pred_seg, gt_seg, input_mask, gt_output_mask)
+
+        results = {**synthesis_results, **scene_editing_results}
+        results["Total Loss"] = synthesis_results["Total Loss"] + scene_editing_results["Total Loss"]
+
+        return results, pred_output_mask
+
+
+class SceneEditingLoss(nn.Module):
+    """
+    Calculates the LPRegionLoss over the segmentation prediction at the given movement masks.
+    """
+
+    def __init__(self, weight=1.0, lpregion_params=[1.0, 0.0, 2.0]):
+        super().__init__()
+
+        self.weight = weight
         self.region_lp = LPRegionLoss(*lpregion_params)
 
         if torch.cuda.is_available():
-            self.region_similarity = self.region_similarity.cuda()
             self.region_lp = self.region_lp.cuda()
 
-    def calculate_predicted_mask(self, pred_img, gt_img, gt_output_mask):
+    def calculate_predicted_mask(self, pred_seg, gt_seg, gt_output_mask):
         # TODO how to vectorize this?
         bs = gt_output_mask.shape[0]
-        c = gt_img.shape[1]
+        c = gt_seg.shape[1]
         color = torch.zeros(bs, c, 1, 1, device=gt_output_mask.get_device())
         for i in range(bs):
             # get the first position where mask is true (nonzero)
@@ -54,16 +85,16 @@ class SceneEditingLoss(nn.Module):
             color_index = torch.nonzero(gt_output_mask[i].squeeze(), as_tuple=False)[0] # TODO DEBUG: CHANGE BACK TO [0]
 
             # get the color from gt_img at that position
-            color[i] = gt_img[i, :, color_index[0], color_index[1]].unsqueeze(1).unsqueeze(2)
+            color[i] = gt_seg[i, :, color_index[0], color_index[1]].unsqueeze(1).unsqueeze(2)
 
         # find all places where the color is equal in pred_img (comparison is per channel here)
         # TODO add "nearest color" search if color is not exactly the same? Does this make sense. We could see it as punishment when color is not exactly similar?
         # But we could use gradients when we search for exact same color and it is not exactly the same
         # Also: Floating point precision???
-        color_equal_per_channel = torch.eq(pred_img, color) # TODO DEBUG: CHANGE BACK TO pred_img
+        color_equal_per_channel = torch.eq(pred_seg, color) # TODO DEBUG: CHANGE BACK TO pred_img
 
         # mulitply it here to still have gradients back to pred_img
-        pred_output_mask_per_channel = pred_img * color_equal_per_channel
+        pred_output_mask_per_channel = pred_seg * color_equal_per_channel
 
         # mulitply 3x boolean values. Will only be True, when all are True (is a differentiable way of doing bitwise_and)
         pred_output_mask = (pred_output_mask_per_channel[:, 0] * pred_output_mask_per_channel[:, 1] * pred_output_mask_per_channel[:, 2]).unsqueeze(1)
@@ -86,24 +117,18 @@ class SceneEditingLoss(nn.Module):
 
         return pred_output_mask
 
-    def forward(self, pred_img, gt_img, input_mask, gt_output_mask):
+    def forward(self, pred_seg, gt_seg, input_mask, gt_output_mask):
         # calculate predicted_mask
-        pred_output_mask = self.calculate_predicted_mask(pred_img, gt_img, gt_output_mask)
+        pred_output_mask = self.calculate_predicted_mask(pred_seg, gt_seg, gt_output_mask)
 
-        # pass to region similarity loss
-        region_sim = self.region_similarity(pred_output_mask, gt_output_mask)
-
-        # pass to lp region loss: lower_region is input mask and higher_region is merged_output_mask
-        # (this is the convention of this loss) TODO makes this sense?
-        # Alternative: higher region is merged_output_mask + input_mask, lower_region is rest of the image
-        merged_output_mask = (pred_output_mask > 0) | (gt_output_mask == True)
-        region_lp = self.region_lp(pred_img, gt_img, input_mask, merged_output_mask)
+        # pass to lp region loss: higher_region is everything that was moved (input, gt, pred), lower_region is the rest (unmoved pixels)
+        merged_output_mask = (pred_output_mask > 0) | gt_output_mask | input_mask
+        region_lp = self.region_lp(pred_seg, gt_seg, ~merged_output_mask, merged_output_mask)
 
         # create dict containing both results
-        result = {**region_sim, **region_lp}
-        result["Total Loss"] = region_sim["Total Loss"] * self.lambdas[0] + region_lp["Total Loss"] * self.lambdas[1]
+        region_lp["Total Loss"] = region_lp["Total Loss"] * self.weight
 
-        return result
+        return region_lp, pred_output_mask
 
 
 class SynthesisLoss(nn.Module):
@@ -166,6 +191,9 @@ class SynthesisLoss(nn.Module):
         """
 
         if self.ignore_at_scene_editing_masks:
+            if input_mask is None or gt_output_mask is None:
+                raise ValueError("You wanted to ignore SynthesisLoss at scene editing masks, but provided no masks in the forward pass.")
+
             pred_img = pred_img.clone()
             gt_img = gt_img.clone()
             pred_img *= ~input_mask
@@ -208,10 +236,13 @@ class SynthesisLoss(nn.Module):
 
 class QualityMetrics(nn.Module):
     """
-    Class for simultaneous calculation of known image quality metrics PSNR, SSIM.
+    Class for simultaneous calculation of known image quality metrics PSNR, SSIM and REGSIM.
     Metrics to use should be passed as argument.
+
+    PSNR, SSIM will be calculated for both rgb and seg predictions.
+    REGSIM will only be calculated for segmentation predictions (see RegionSimilarity class in losses.py).
     """
-    def __init__(self, metrics=["PSNR", "SSIM"]):
+    def __init__(self, metrics=["PSNR", "SSIM", "REGSIM"], ignore_rgb_at_scene_editing_masks=True):
         super().__init__()
 
         print("Metric names:", *metrics)
@@ -220,11 +251,15 @@ class QualityMetrics(nn.Module):
             [self.get_metric_from_name(metric) for metric in metrics]
         )
 
+        self.ignore_rgb_at_scene_editing_masks = ignore_rgb_at_scene_editing_masks
+
     def get_metric_from_name(self, name):
         if name == "PSNR":
             metric = PSNR()
         elif name == "SSIM":
             metric = SSIM()
+        elif name =="REGSIM":
+            metric = RegionSimilarity()
         else:
             raise ValueError("Invalid metric name in QualityMetrics: " + name)
         # TODO: If needed, more metric classes can be introduced here later on.
@@ -232,7 +267,7 @@ class QualityMetrics(nn.Module):
         if torch.cuda.is_available():
             return metric.cuda()
 
-    def forward(self, pred_img, gt_img):
+    def forward(self, pred_img, gt_img, pred_seg, gt_seg, pred_output_mask=None, gt_output_mask=None, input_mask=None):
         """
         For each metric function provided, evaluate the function with prediction and target.
         Output is returned in "results" dict.
@@ -246,11 +281,36 @@ class QualityMetrics(nn.Module):
         # Initialize output dict
         results = {}
 
+        if self.ignore_rgb_at_scene_editing_masks and gt_output_mask is not None and input_mask is not None:
+            # set pred_img and gt_img to zero at mask regions
+            pred_img = pred_img.clone()
+            gt_img = gt_img.clone()
+            pred_img *= ~input_mask
+            pred_img *= ~gt_output_mask
+            gt_img *= ~input_mask
+            gt_img *= ~gt_output_mask
+
         for func in self.metrics:
-            # Evaluate each different metric (SSIM, PSNR) function between the prediction and target
-            out = func(pred_img, gt_img)
-            
-            # Merge both dicts and store the resulting dict in results
-            results.update(out)
+            if isinstance(func, PSNR) or isinstance(func, SSIM):
+                # calculate for rgb and add prefix "rgb" to result
+                out_rgb = func(pred_img, gt_img)
+                rgb_key = next(iter(out_rgb))
+                out_rgb["rgb_"+str(rgb_key)] = out_rgb.pop(rgb_key)
+
+                # calculate for seg and add prefix "seg" to result
+                out_seg = func(pred_seg, gt_seg)
+                seg_key = next(iter(out_seg))
+                out_seg["seg_" + str(seg_key)] = out_seg.pop(seg_key)
+
+                # add to overall output dict
+                results.update(out_rgb)
+                results.update(out_seg)
+
+            elif isinstance(func, RegionSimilarity) and pred_output_mask is not None and gt_output_mask is not None:
+                # calculate for masks and add to result
+                out = func(pred_output_mask, gt_output_mask)
+                results.update(out)
+            else:
+                raise ValueError("Invalid metric in QualityMetrics: " + func)
 
         return results # Contains individual metric measurements

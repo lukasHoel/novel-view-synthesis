@@ -158,6 +158,7 @@ class NovelViewSynthesisModel(nn.Module):
                 output_RT,
                 output_RT_inv,
                 gt_img=None,
+                gt_seg=None,
                 depth_img=None,
                 dynamics=None):
         # ENCODE IMAGE
@@ -222,6 +223,7 @@ class NovelViewSynthesisModel(nn.Module):
         return {
             "InputImg": input_img,
             "OutputImg": gt_img,
+            "OutputSeg": gt_seg,
             "PredImg": transformed_img,
             "PredSeg": transformed_seg,
             "PredDepth": regressed_pts,

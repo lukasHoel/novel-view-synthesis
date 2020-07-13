@@ -5,7 +5,7 @@ Author: Lukas Hoellein
 
 import numpy as np
 
-from models.synthesis.synt_loss_metric import SynthesisLoss, QualityMetrics
+from models.synthesis.synt_loss_metric import SynthesisLoss, QualityMetrics, SynthesisLossRGBandSeg
 from models.nvs_model import NovelViewSynthesisModel
 import os
 import re
@@ -38,10 +38,11 @@ def default_batch_loader(batch):
     output_RT = batch['cam']['RT2']
     output_RT_inv = batch['cam']['RT2inv']
     gt_img = batch['output']['image'] if batch['output'] is not None else None
+    gt_seg = batch['output']['seg'] if batch['output'] is not None else None
     depth_img = batch['depth']
     dynamics = batch['dynamics']
 
-    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, depth_img, dynamics
+    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, gt_seg, depth_img, dynamics
 
 # NOTE: Unused, might be used for debugging
 def check_norm(img, verbose=False):
@@ -96,7 +97,7 @@ class Checkpoint(object):
         self.solver_name = solver_name
         self.checkpoint_path = checkpoint_path
         self.checkpoint_freq = checkpoint_freq if checkpoint_freq else 1
-        
+
         self.max_val_acc = -np.inf
         self.last_saved = -1
 
@@ -117,7 +118,7 @@ class Checkpoint(object):
     def set_path(self, checkpoint_path):
         self.checkpoint_path = checkpoint_path
 
-    def setup(self, start_epoch=0): 
+    def setup(self, start_epoch=0):
         """Folder setup and sanity checks for checkpoints"""
         try:
             os.mkdir(self.checkpoint_path)
@@ -177,7 +178,7 @@ class Checkpoint(object):
                     'optim_state': optim_state,
                     'start_epoch': epoch,
                     'max_val_acc': val_acc}, full_path)
-                    
+
         print("Checkpoint {} is created".format(file_name))
 
         self.last_saved = epoch
@@ -246,7 +247,7 @@ class NVS_Solver(object):
         self.optim_args = optim_args_merged
         self.optim = optim
         self.optim_state = optim_state
-        self.loss_func = loss_func if loss_func is not None else SynthesisLoss()
+        self.loss_func = loss_func if loss_func is not None else SynthesisLossRGBandSeg()
         self.acc_func = QualityMetrics()
         self.batch_loader = default_batch_loader
 
@@ -278,11 +279,16 @@ class NVS_Solver(object):
         batch = to_cuda(self.batch_loader(batch))
         output = model(*batch)
         dynamics = batch[-1]
-
-        loss_dir = self.loss_func(output['PredImg'], output['OutputImg'], dynamics["input_mask"], dynamics["output_mask"])
         acc_dir = None
-        if self.acc_func is not None:
-            acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
+
+        if dynamics is not None:
+            loss_dir, pred_output_mask = self.loss_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'], dynamics["input_mask"], dynamics["output_mask"])
+            if self.acc_func is not None:
+                acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'], pred_output_mask, dynamics["output_mask"], dynamics["input_mask"])
+        else:
+            loss_dir = self.loss_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
+            if self.acc_func is not None:
+                acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
 
         return loss_dir, output, acc_dir
 
@@ -299,7 +305,7 @@ class NVS_Solver(object):
             self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
                                    acc_dir[acc].detach().data.cpu().numpy(),
                                    idx)
-        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["ssim"].detach().cpu().numpy() # could also use acc_dir["psnr"]
+        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["rgb_ssim"].detach().cpu().numpy() # could also use acc_dir["rgb_psnr"]
 
     def log_epoch_loss_and_acc(self, train_loss, val_loss, train_acc, val_acc, idx):
         self.train_loss_history.append(train_loss)
@@ -336,17 +342,21 @@ class NVS_Solver(object):
         step: used for stamping epoch or iteration
         """
         # TODO: depth_batch is ignored for the moment, however, if needed, it can also be integrated later on
-        input_batch, target_batch, pred_batch, depth_batch, input_depth = output["InputImg"].cpu(),\
-                                                                          output["OutputImg"].cpu(),\
-                                                                          output["PredImg"].cpu(),\
-                                                                          output["PredDepth"].cpu(),\
-                                                                          output['InputDepth'].cpu()
+        input_batch, target_batch, target_batch_seg, pred_batch, pred_batch_seg, depth_batch, input_depth = output["InputImg"].detach().cpu(),\
+                                                                          output["OutputImg"].detach().cpu(), \
+                                                                          output["OutputSeg"].detach().cpu(), \
+                                                                          output["PredImg"].detach().cpu(), \
+                                                                          output["PredSeg"].detach().cpu(), \
+                                                                          output["PredDepth"].detach().cpu(),\
+                                                                          output['InputDepth'].detach().cpu()
         with torch.no_grad():
             # In case of a single image add one dimension to the beginning to create single image batch
             if len(pred_batch.shape) == 3:
                 input_batch = input_batch.unsqueeze(0)
                 target_batch = target_batch.unsqueeze(0)
+                target_batch_seg = target_batch_seg.unsqueeze(0)
                 pred_batch = pred_batch.unsqueeze(0)
+                pred_batch_seg = pred_batch_seg.unsqueeze(0)
                 depth_batch = depth_batch.unsqueeze(0)
 
             if len(pred_batch.shape) != 4:
@@ -357,7 +367,9 @@ class NVS_Solver(object):
             if take_slice and (type(take_slice) in (list, tuple)) and (len(take_slice) == 2):
                 input_batch = input_batch[take_slice[0], take_slice[1]]
                 target_batch = target_batch[take_slice[0], take_slice[1]]
+                target_batch_seg = target_batch_seg[take_slice[0], take_slice[1]]
                 pred_batch = pred_batch[take_slice[0], take_slice[1]]
+                pred_batch_seg = pred_batch_seg[take_slice[0], take_slice[1]]
                 depth_batch = depth_batch[take_slice[0], take_slice[1]]
 
             # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
@@ -372,7 +384,9 @@ class NVS_Solver(object):
                 img_lst = torch.cat((img_lst,
                     input_batch[i].unsqueeze(0),
                     target_batch[i].unsqueeze(0),
-                    pred_batch[i].unsqueeze(0)), dim=0)
+                    pred_batch[i].unsqueeze(0),
+                    target_batch_seg[i].unsqueeze(0),
+                    pred_batch_seg[i].unsqueeze(0)), dim=0)
 
             if depth:
                 depth_lst = torch.Tensor()
@@ -389,7 +403,7 @@ class NVS_Solver(object):
                 depth_grid = make_grid(depth_lst, nrow=2)
                 self.writer.add_image(tag+'/depth', depth_grid, global_step=step)
 
-            img_grid = make_grid(img_lst, nrow=3) # Per row, pick three images from the stack
+            img_grid = make_grid(img_lst, nrow=5) # Per row, pick five images from the stack
             # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
@@ -470,14 +484,14 @@ class NVS_Solver(object):
         """
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model.to(device)
-        
+
         # Use registered optimizer state if available (becomes available when loaded from checkpoint.)
         if self.optim_state:
             optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()))
             optim.load_state_dict(self.optim_state)
         else:
             optim = self.optim(filter(lambda p: p.requires_grad, model.parameters()), **self.optim_args)
-        
+
         self._reset_histories()
         iter_per_epoch = len(train_loader)
 

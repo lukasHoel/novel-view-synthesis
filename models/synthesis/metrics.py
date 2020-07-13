@@ -115,3 +115,25 @@ class PSNR(nn.Module):
         mse = F.mse_loss(pred_img, gt_img)
         psnr = 10 * (1 / mse).log10()
         return {"psnr": psnr.mean()}
+
+class RegionSimilarity(nn.Module):
+    """
+    Compares the mask of where an object was moved to during scene-editing with the gt mask where that object should be
+    moved to: calculates IntersectionOverUnion (IoU).
+    """
+    def forward(self, pred_mask, gt_mask):
+        iou = torch.sum(pred_mask * gt_mask) / torch.sum(gt_mask + pred_mask - gt_mask * pred_mask)
+
+        '''
+        for i in range(gt_mask.shape[0]):
+            import matplotlib.pyplot as plt
+
+            plt.imshow(pred_mask[i].squeeze().cpu().detach().numpy())
+            plt.show()
+
+            plt.imshow(gt_mask[i].squeeze().cpu().detach().numpy().squeeze())
+            plt.show()
+        print(iou_inv)
+        '''
+
+        return {"region_similarity": iou}
