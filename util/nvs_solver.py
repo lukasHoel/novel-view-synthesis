@@ -42,7 +42,10 @@ def default_batch_loader(batch):
     depth_img = batch['depth']
     dynamics = batch['dynamics']
 
-    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, gt_seg, depth_img, dynamics
+    # this could also be None if such data is not present in the dataset
+    gt_img_moved_for_evaluation_only = batch['output']['gt_moved_rgb_for_evaluation_only'] if batch['output'] is not None else None
+
+    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, gt_seg, depth_img, dynamics, gt_img_moved_for_evaluation_only
 
 # NOTE: Unused, might be used for debugging
 def check_norm(img, verbose=False):
@@ -277,6 +280,11 @@ class NVS_Solver(object):
     def forward_pass(self, model, batch):
 
         batch = to_cuda(self.batch_loader(batch))
+
+        # this gets not even passed to our model, only for evaluation purposes
+        gt_img_moved_for_evaluation_only = batch[-1]
+        batch = batch[:-1]
+
         output = model(*batch)
         dynamics = batch[-1]
         acc_dir = None
@@ -289,6 +297,16 @@ class NVS_Solver(object):
             loss_dir = self.loss_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
             if self.acc_func is not None:
                 acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
+
+        if dynamics is not None and gt_img_moved_for_evaluation_only is not None:
+            # evaluate with gt_rgb_img_moved
+            gt_img_moved_acc_dir = self.acc_func(output['PredImg'], gt_img_moved_for_evaluation_only, output['PredSeg'], output['OutputSeg'], pred_output_mask, dynamics["output_mask"], dynamics["input_mask"])
+
+            # do not keep the segmentation values as they are identical to the ones above and add a prefix to the other ones
+            gt_img_moved_acc_dir = {"gt_rgb_moved_"+k: v for k,v in gt_img_moved_acc_dir.items() if not "seg" in k}
+
+            # merge this dict into acc_dir
+            acc_dir.update(gt_img_moved_acc_dir)
 
         return loss_dir, output, acc_dir
 

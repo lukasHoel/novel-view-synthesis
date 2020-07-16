@@ -56,6 +56,11 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
         else:
             img_seg.extend(moved_img)
 
+        # load moved img with gt rgb only for evaluation purposes
+        moved_img_gt_rgb = img_rgb.copy()
+        moved_img_gt_rgb.extend(sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if
+                            f.endswith(".png") and not f.endswith(".seg.png")]))
+
         # load moved depth and depth.npy
         moved_depth = sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if f.endswith('.gl.depth')])
         if len(moved_depth) != len(depth):
@@ -81,7 +86,7 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
             dynamics = json.load(f)
             dynamics = dynamics[0] # TODO SUPPORT MULTIPLE TRANSFORMATIONS IN ONE JSON
 
-        return img_rgb, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, size, dynamics
+        return img_rgb, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, size, dynamics, moved_img_gt_rgb
 
     def modify_dynamics_transformation(self, transformation):
         """
@@ -180,7 +185,7 @@ def test():
         torchvision.transforms.ToTensor(),
     ])
 
-    dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0003",
+    dataset = ICLNUIM_Dynamic_Dataset("/home/lukas/Desktop/datasets/ICL-NUIM/custom/seq0001",
                              input_as_segmentation=False,
                              sampleOutput=True,
                              output_from_other_view=True,
@@ -222,43 +227,48 @@ def test():
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
     out_seg = np.moveaxis(item['output']['seg'].numpy(), 0, -1)
     out_idx = item['output']['idx']
+    out_img_moved_gt_for_evaluation_only = np.moveaxis(item['output']['gt_moved_rgb_for_evaluation_only'].numpy(), 0, -1)
 
     depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
     depth_out = np.moveaxis(item['output']['depth'].numpy(), 0, -1).squeeze()
 
-    fig.add_subplot(1, 7, 1)
+    fig.add_subplot(2, 4, 1)
     plt.title("Image")
     plt.imshow(img)
 
-    fig.add_subplot(1, 7, 2)
+    fig.add_subplot(2, 4, 2)
     plt.title("Output Image " + str(out_idx))
     plt.imshow(out_img)
 
-    fig.add_subplot(1, 7, 3)
+    fig.add_subplot(2, 4, 3)
     plt.title("Output Seg " + str(out_idx))
     plt.imshow(out_seg)
 
-    fig.add_subplot(1, 7, 4)
+    fig.add_subplot(2, 4, 4)
     plt.title("Mask dynamics at input")
     img[:,:] = np.array([0, 0, 0])
     mask = np.moveaxis(item["dynamics"]["input_mask"].numpy(), 0, -1).squeeze()
     img[mask == 1] = np.array([1, 1, 1])
     plt.imshow(img)
 
-    fig.add_subplot(1, 7, 5)
+    fig.add_subplot(2, 4, 5)
     plt.title("Mask dynamics at output")
     img[:, :] = np.array([0, 0, 0])
     mask = np.moveaxis(item["dynamics"]["output_mask"].numpy(), 0, -1).squeeze()
     img[mask == 1] = np.array([1, 1, 1])
     plt.imshow(img)
 
-    fig.add_subplot(1, 7, 6)
+    fig.add_subplot(2, 4, 6)
     plt.title("Input Depth Map")
     plt.imshow(depth)
 
-    fig.add_subplot(1, 7, 7)
+    fig.add_subplot(2, 4, 7)
     plt.title("Output Depth Map")
     plt.imshow(depth_out)
+
+    fig.add_subplot(2, 4, 8)
+    plt.title("Output Moved RGB for evaluation only")
+    plt.imshow(out_img_moved_gt_for_evaluation_only)
 
     plt.show()
 

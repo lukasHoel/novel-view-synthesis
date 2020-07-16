@@ -88,7 +88,8 @@ class DiskDataset(Dataset, ABC):
         self.has_binary_depth, \
         self.cam, \
         self.size, \
-        self.dynamics = self.load_data(dir_content)
+        self.dynamics, \
+        self.moved_rgb_gt_for_evaluation_only = self.load_data(dir_content)
 
         # CREATE OUTPUT PAIR
         if self.sampleOutput:
@@ -102,6 +103,12 @@ class DiskDataset(Dataset, ABC):
             return Image.open(os.path.join(self.path, self.img_seg[idx]))
         else:
             return Image.open(os.path.join(self.path, self.img_rgb[idx]))
+
+    def load_moved_gt_rgb_image_for_evaluation(self, idx):
+        if self.moved_rgb_gt_for_evaluation_only is not None:
+            return Image.open(os.path.join(self.path, self.moved_rgb_gt_for_evaluation_only[idx]))
+        else:
+            return None
 
     def load_depth(self, idx):
         if self.has_binary_depth:
@@ -231,19 +238,20 @@ class DiskDataset(Dataset, ABC):
     def load_data(self, dir_content):
         """
         Each dataset defines how to load the data:
-            - img: list of all paths to images
+            - img_rgb: list of all paths to images
+            - img_seg: list of all paths to seg images
             - depth: list of all paths to depth files in .depth format
             - has_depth: if depth list is empty or not
             - depth_binary: list of all paths to depth files in .depth.npy format
             - has_binary_depth: if depth_binary list is empty or not
             - cam: list of all paths to extrinsic camera .txt files
             - size: how many data samples are available
-            - seg_img: list of all pahts to segmentation images. needed for calculating the mask dynamics.
             - dynamics: list of path to the .dynamics file. If list is None, then we do not have dynamics for this dataset available.
+            - moved_rgb_gt_for_evaluation_only: list of moved rgb images only used for evaluation metrics (never during training)
 
         :param dir_content: list of all files in the root path (self.path)
 
-        :return: tuple (img, depth, has_depth, depth_binary, has_binary_depth, cam, size, seg_img, dynamics)
+        :return: tuple (img_rgb, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, size, dynamics, moved_rgb_gt_for_evaluation_only)
         """
         pass
 
@@ -336,6 +344,9 @@ class DiskDataset(Dataset, ABC):
                 output_image_seg = None
             output_depth = self.load_depth(output_idx)
 
+            # load moved_gt_rgb_image_for_evaluation_only if available
+            moved_output_gt_rgb_image_for_evaluation_only = self.load_moved_gt_rgb_image_for_evaluation(output_idx)
+
             # load cam of new index
             RT2, RT2inv = self.load_ext_cam(output_idx)
 
@@ -346,7 +357,8 @@ class DiskDataset(Dataset, ABC):
                 'image': output_image_rgb,
                 'seg': output_image_seg,
                 'depth': output_depth,
-                'idx': output_idx
+                'idx': output_idx,
+                'gt_moved_rgb_for_evaluation_only': moved_output_gt_rgb_image_for_evaluation_only
             }
 
         # LOAD DYNAMICS
@@ -380,6 +392,8 @@ class DiskDataset(Dataset, ABC):
                     sample['output']['seg'] = self.transform(sample['output']['seg'])
                 if sample['output']['depth'] is not None:
                     sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
+                if sample['output']['gt_moved_rgb_for_evaluation_only'] is not None:
+                    sample['output']['gt_moved_rgb_for_evaluation_only'] = self.transform(sample['output']['gt_moved_rgb_for_evaluation_only'])
 
         # STORE IN CACHE
         if self.cacheItems:
