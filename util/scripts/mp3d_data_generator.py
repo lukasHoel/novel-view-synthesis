@@ -11,6 +11,9 @@ from util.scripts.mp3d_data_gen_deps.synsin_train_options import ArgumentParser
 import os
 import re
 
+from PIL import Image
+from habitat_sim.utils.common import d3_40_colors_rgb
+
 
 torch.backends.cudnn.benchmark = True
 
@@ -34,6 +37,13 @@ def split_RT(RT):
     cam_dir = np.array2string(cam_dir, formatter=formatter, max_line_width=np.inf, separator=", ")
     return cam_pos, cam_up, cam_dir
 
+def get_semantic_image(semantic_labels):
+    semantic_img = Image.new("P", (semantic_labels.shape[1], semantic_labels.shape[0]))
+    semantic_img.putpalette(d3_40_colors_rgb.flatten())
+    semantic_img.putdata((semantic_labels.flatten() % 40).astype(np.uint8))
+    semantic_img = semantic_img.convert("RGBA")
+    return semantic_img
+    
 def save_data(batch,
               folder,
               scene_id,
@@ -41,7 +51,8 @@ def save_data(batch,
               save_images, 
               save_txt_depth, 
               save_binary_depth, 
-              save_cam, 
+              save_cam,
+              save_sem_images,
               save_txt_semantics,
               save_binary_semantics):
 
@@ -59,7 +70,7 @@ def save_data(batch,
     img_batch0, img_batch1 = batch["images"] if save_images else (None, None)
     depth_batch0, depth_batch1 = batch["depths"] if save_txt_depth or save_binary_depth else (None, None)
     cam_batch0, cam_batch1 = batch["cameras"] if save_cam else (None, None)
-    semantic_batch0, semantic_batch1 = batch["semantics"] if save_txt_semantics or save_binary_semantics else (None, None)
+    semantic_batch0, semantic_batch1 = batch["semantics"] if save_sem_images or save_txt_semantics or save_binary_semantics else (None, None)
     
     file_prefix = os.path.join(full_path, scene_id)
     cam_file_content = "{:<12} = {}';\n"
@@ -81,6 +92,9 @@ def save_data(batch,
     if save_cam:
         exts.append("txt")
 
+    if save_sem_images:
+        exts.append("seg.png")
+
     if save_txt_semantics:
         exts.append("semantic")
 
@@ -97,9 +111,9 @@ def save_data(batch,
         
         # Save RGB images (scene_idx_pairid.png)
         if save_images:
-            img0, img1 = img_batch0[sample_idx].cpu(), img_batch1[sample_idx].cpu()
-            save_image(img0, template.format(pair_id=0, ext='png'))
-            save_image(img1, template.format(pair_id=1, ext='png'))
+            rgb_img0, rgb_img1 = img_batch0[sample_idx].cpu(), img_batch1[sample_idx].cpu()
+            save_image(rgb_img0, template.format(pair_id=0, ext='png'))
+            save_image(rgb_img1, template.format(pair_id=1, ext='png'))
 
         # Save depth information
         if save_txt_depth or save_binary_depth:
@@ -145,9 +159,15 @@ def save_data(batch,
                 f.write(info)
 
         # Save semantic information in the form of int IDs
-        if save_txt_semantics or save_binary_semantics:
+        if save_sem_images or save_txt_semantics or save_binary_semantics:
             semantic0, semantic1 = semantic_batch0[sample_idx].squeeze(0).cpu().numpy(),\
                                    semantic_batch1[sample_idx].squeeze(0).cpu().numpy()
+
+            if save_sem_images:
+                sem_img0 = get_semantic_image(semantic0)
+                sem_img1 = get_semantic_image(semantic1)
+                sem_img0.save(template.format(pair_id=0, ext='seg.png'))
+                sem_img1.save(template.format(pair_id=1, ext='seg.png'))
 
             # Save semantic information as text file (scene_idx_pairid.semantic)
             if save_txt_semantics:
@@ -178,24 +198,26 @@ if __name__ == "__main__":
     # - Point goal navigation: https://github.com/facebookresearch/habitat-api#task-datasets
     # conda activate habitat
 
-    # Relevant flags:
-    # Modifiable @train_options.py:
-      # Flags to modify:
-      # python mp3d_data_generator.py --max_runs 2 --sample_batch_count 5 --sample_batch_size 5 --normalize_image --data_render_path X --habitat_api_prefix Y
-        # --max_runs 2 (default: 90)
-        # --sample_batch_count 5 (default: 1)
-        # --sample_batch_size 5 (default: 100)
-        # --normalize_image True (default: False)
+    # Command:  
+    # python mp3d_data_generator.py --max_runs N --sample_batch_count BC --sample_batch_size BS --data_render_path X --habitat_api_prefix Y
+    
+    # Flags @train_options.py:
+      # Flags that should be changed for desired path and sample settings:
+        # --max_runs N (default: 90)
+        # --sample_batch_count BC (default: 1)
+        # --sample_batch_size BS (default: 100)
         # --envs scene_id1 scene_id2 (default: []) 
         # --data_render_path path_to_dataset_to_be_generated (required, e.g. "./data/mp3d_dataset")
         # --habitat_api_prefix path_to_habitat-api (required, e.g. "'path_prefix' part of path_prefix/habitat-api")
-      # Flags that can stay the same:
-        # --no_image (default: False)
         # --no_txt_depth (default: False)
-        # --no_binary_depth (default: False)
-        # --no_cam (default: False)
         # --no_txt_semantic (default: False)
         # --no_binary_semantic (default: False)
+      # Flags that can stay the same among different runs:
+        # --no_image (default: False)
+        # --no_binary_depth (default: False)
+        # --no_cam (default: False)
+        # --no_sem_images (default: False)
+        # --normalize_image True (default: True)
         # --num_workers 1 (default: 1)
         # --render_ids 0 (default: [0])
         # --gpu_ids 0 (default: 0)
@@ -233,6 +255,7 @@ if __name__ == "__main__":
     save_txt_depth = not opts.no_txt_depth
     save_binary_depth = not opts.no_binary_depth
     save_cam = not opts.no_cam
+    save_sem_images = not opts.no_sem_images
     save_txt_semantics = not opts.no_txt_semantic
     save_binary_semantics = not opts.no_binary_semantic
 
@@ -245,7 +268,8 @@ if __name__ == "__main__":
                 batch = next(batch_iter)
                 scene_id = batch["scene_path"][0].split("/")[-2]
                 save_data(batch, dataset_path, scene_id, batch_idx, 
-                          save_images, save_txt_depth, save_binary_depth, save_cam, save_txt_semantics, save_binary_semantics)
+                          save_images, save_txt_depth, save_binary_depth, save_cam, 
+                          save_sem_images, save_txt_semantics, save_binary_semantics)
 
             # Update the list once processing the env is completed
             envs_processed.append(scene_id)

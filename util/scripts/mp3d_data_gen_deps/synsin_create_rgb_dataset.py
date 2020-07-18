@@ -94,7 +94,7 @@ class RandomImageGenerator(object):
 
         # print("gpu_id", gpu_id)
         resolution = opts.W
-        if opts.no_txt_semantic and opts.no_binary_semantic:
+        if opts.no_sem_images and opts.no_txt_semantic and opts.no_binary_semantic:
             sensors = ["RGB_SENSOR", "DEPTH_SENSOR"]
         else:
             sensors = ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]

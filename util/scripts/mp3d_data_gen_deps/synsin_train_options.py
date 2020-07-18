@@ -160,6 +160,9 @@ class ArgumentParser:
             "--no_cam", action="store_true", default=False
         )
         dataset_params.add_argument(
+            "--no_sem_images", action="store_true", default=False
+        )
+        dataset_params.add_argument(
             "--no_txt_semantic", action="store_true", default=False
         )
         dataset_params.add_argument(
@@ -213,7 +216,7 @@ class ArgumentParser:
             "--use_alpha", action="store_true", default=False
         )
         dataset_params.add_argument(
-            "--normalize_image", action="store_true", default=False
+            "--normalize_image", action="store_true", default=True
         )
 
     def add_train_parameters(self):
