@@ -7,10 +7,10 @@ Usage info for blender 2.83.1
 3) After changing static paths inside in main.py (input path should be the same as the one at step 2), import main.py script:
    3a) Click on "Scripting" (located in Header Bar)
    3b) Use Python console opened on the left
-   3c) Import main.py:
+   3c) To import main.py:
        import sys 
        sys.path.append('/path/to/novel-view-synthesis/util/scripts/blender/')
-       from main.py import *
+       from main import *
 
 4) See examples in main.py and call desired functions from the python console of blender. 
 
