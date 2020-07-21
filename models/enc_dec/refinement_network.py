@@ -46,7 +46,7 @@ class RefineNet(nn.Module):
         return x
 
 
-class AdaptivSegNet(nn.Module):
+class ParallelRefinementNetwork(nn.Module):
     '''
     Refinement and segmentation network based on ResidualBlock.
     Produces rgb image prediction and the corresponding segmentation mask
@@ -192,3 +192,68 @@ class AdaptivSegNet(nn.Module):
 
         return img, seg
 
+
+class SequentialRefinementNetwork(nn.Module):
+    '''
+    Refinement and segmentation network based on ResidualBlock.
+    Produces rgb image prediction and the corresponding segmentation mask
+    RGB gets predicted first and from that the segmentation network predicts the seg mask.
+    '''
+
+    def __init__(self,
+                 rgb_block_dims=[],
+                 rgb_block_types=[],
+                 seg_block_dims=[],
+                 seg_block_types=[],
+                 activate_out=nn.Sigmoid(),
+                 noisy_bn=True,
+                 spectral_norm=True):
+        '''
+        :param rgb_block_dims: channels of refinement network for rgb
+        :param rgb_block_types: refinement block types for rgb
+        :param seg_block_dims: channels of seg network
+        :param seg_block_types: seg block types
+        :param activate_out: activation function for output
+        :param noisy_bn: whether to inject noise while performing batch norm
+        :param spectral_norm: whether to use spectral norm
+        '''
+
+        super().__init__()
+
+        if(rgb_block_dims[-1] != seg_block_dims[0]):
+            raise ValueError(f"Last block dim of rgb and first block dim of seg must be equal, but they are: {rgb_block_dims[-1]} (rgb) != {seg_block_dims[0]} (seg)")
+
+        self.rgb_blocks = self.create_from_dims_and_type(rgb_block_dims, rgb_block_types, noisy_bn, spectral_norm)
+        self.seg_blocks = self.create_from_dims_and_type(seg_block_dims, seg_block_types, noisy_bn, spectral_norm)
+
+        # Final activation can be:
+        # - nn.Sigmoid to force output to be in range [0,1]
+        # - nn.Tanh to force output to be in range [-1,1]
+        self.activate_out = activate_out
+
+    def create_from_dims_and_type(self, dims, type, noisy_bn, spectral_norm):
+        blocks = []
+
+        for i in range(len(dims) - 1):
+            blocks.append(
+                ResidualBlock(
+                    in_ch=dims[i],
+                    out_ch=dims[i + 1],
+                    block_type=type[i],
+                    noisy_bn=noisy_bn,
+                    spectral_norm=spectral_norm
+                )
+            )
+
+        return nn.Sequential(*blocks)
+
+    def forward(self, x):
+
+        img = self.rgb_blocks(x)
+        seg = self.seg_blocks(img)
+
+        if self.activate_out:
+            img = self.activate_out(img)
+            seg = self.activate_out(seg)
+
+        return img, seg

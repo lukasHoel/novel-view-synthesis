@@ -61,6 +61,10 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
         moved_img_gt_rgb.extend(sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if
                             f.endswith(".png") and not f.endswith(".seg.png")]))
 
+        if len(moved_img_gt_rgb) != len(img_seg):
+            print("No moved gt rgb images for evaluation found in: {}".format(self.path))
+            moved_img_gt_rgb = None
+
         # load moved depth and depth.npy
         moved_depth = sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if f.endswith('.gl.depth')])
         if len(moved_depth) != len(depth):
