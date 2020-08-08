@@ -1,5 +1,6 @@
 import bpy
 import bmesh
+import json
 import os
 import struct
 import math
@@ -21,7 +22,48 @@ HEADER = \
 "property int object_id\n" + \
 "end_header\n"
 
-# Global variables used frequently in functions
+SEG_COLORS = [[ 31, 119, 180],
+              [174, 199, 232],
+              [255, 127,  14],
+              [255, 187, 120],
+              [ 44, 160,  44],
+              [152, 223, 138],
+              [214,  39,  40],
+              [255, 152, 150],
+              [148, 103, 189],
+              [197, 176, 213],
+              [140,  86,  75],
+              [196, 156, 148],
+              [227, 119, 194],
+              [247, 182, 210],
+              [127, 127, 127],
+              [199, 199, 199],
+              [188, 189,  34],
+              [219, 219, 141],
+              [ 23, 190, 207],
+              [158, 218, 229],
+              [ 57,  59, 121],
+              [ 82,  84, 163],
+              [107, 110, 207],
+              [156, 158, 222],
+              [ 99, 121,  57],
+              [140, 162,  82],
+              [181, 207, 107],
+              [206, 219, 156],
+              [140, 109,  49],
+              [189, 158,  57],
+              [231, 186,  82],
+              [231, 203, 148],
+              [132,  60,  57],
+              [173,  73,  74],
+              [214,  97, 107],
+              [231, 150, 156],
+              [123,  65, 115],
+              [165,  81, 148],
+              [206, 109, 189],
+              [222, 158, 214]]
+
+#              Global variables used frequently in functions
 obj = obj_data = mesh = VERTEX_COUNT = FACE_COUNT = None
 
 vertex_to_rgb = []
@@ -381,9 +423,9 @@ def compose_transforms(transforms, clear=True):
 
     return composite
 
-def export_habitat_matrix(path, transforms, clear=True):
+def export_moved_info(path, transforms, objID, clear=True):
     """Takes a single matrix or a list of matrices and stores and returns overall matrix with respect to habitat-sim convention (rotation around x ccw with 90 degrees)"""
-    global from_blender_to_habitat
+    global from_blender_to_habitat, SEG_COLORS
 
     transform = transforms
     if isinstance(transforms, list):
@@ -391,8 +433,17 @@ def export_habitat_matrix(path, transforms, clear=True):
     
     transform = from_blender_to_habitat @ transform
 
+    flattened = []
+    for row in transform[:3]:
+        flattened += list(row)
+
+    info = {
+        "color": SEG_COLORS[objID],
+        "name": objID,
+        "transformation": flattened
+    }
+
     with open(path, "w+") as file:
-        as_nested_lists = [str(list(row)) + '\n' for row in transform]
-        file.writelines(as_nested_lists)
+        json.dump(info, file, indent=4)
 
     return transform
