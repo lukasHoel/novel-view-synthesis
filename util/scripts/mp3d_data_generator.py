@@ -41,7 +41,7 @@ def get_semantic_image(semantic_labels):
     semantic_img = Image.new("P", (semantic_labels.shape[1], semantic_labels.shape[0]))
     semantic_img.putpalette(d3_40_colors_rgb.flatten())
     semantic_img.putdata((semantic_labels.flatten() % 40).astype(np.uint8))
-    semantic_img = semantic_img.convert("RGBA")
+    semantic_img = semantic_img.convert("RGB")
     return semantic_img
     
 def save_data(batch,
