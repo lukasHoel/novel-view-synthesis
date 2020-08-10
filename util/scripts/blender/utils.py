@@ -74,11 +74,11 @@ objID_to_face = {}
 # Later transformation matrices can be composed with compose_transforms function
 transforms = []
 
-from_blender_to_habitat = mathutils.Matrix([[1,  0, 0, 0], 
-                                            [0,  0, 1, 0], 
-                                            [0, -1, 0, 0],
-                                            [0,  0, 0, 1]])
-from_habitat_to_blender = from_blender_to_habitat.inverted()
+rotx90minus = mathutils.Matrix([[1,  0, 0, 0], 
+                             [0,  0, 1, 0], 
+                             [0, -1, 0, 0],
+                             [0,  0, 0, 1]])
+rotx90plus = rotx90minus.inverted()
 
 def blender_init():
     """
@@ -307,18 +307,19 @@ def cut_object(objID):
     bmesh.ops.delete(mesh, geom=list(del_edges), context="EDGES_FACES")
     bmesh.update_edit_mesh(obj_data, True)
     
-def get_RT_matrix(angles, t, in_degrees=False):
+def get_RT_matrix(angles, t, square=True, in_degrees=False):
     """Specify rotation angles (as (rx, ry, rz) in radians by default) and translation parameters (as (x,y,z)), return equivalent 3x4 transformation matrix"""
     if in_degrees:
         angles = [math.radians(angle) for angle in angles]
     # Get 4x4 rotation matrix
     euler = mathutils.Euler(angles, 'XYZ')
-    R = euler.to_matrix().to_4x4()
-    # Generate 3x4 RT
-    RT = mathutils.Matrix(R[0:3])
+    RT = euler.to_matrix().to_4x4()
     # Embed translation
-    RT.col[3] = mathutils.Vector(t)
-    # Return overall RT matrix as 3x4
+    RT.col[3] = mathutils.Vector((*t, 1))
+    if not square:
+      # Reduce to 3x4 RT
+      RT = mathutils.Matrix(RT[0:3])
+    # Return overall RT matrix as 4x4 or 3x4 depending on square flag
     return RT
 
 def selection_center():
@@ -425,13 +426,13 @@ def compose_transforms(transforms, clear=True):
 
 def export_moved_info(path, transforms, objID, clear=True):
     """Takes a single matrix or a list of matrices and stores and returns overall matrix with respect to habitat-sim convention (rotation around x ccw with 90 degrees)"""
-    global from_blender_to_habitat, SEG_COLORS
+    global rotx90minus, rotx90plus, SEG_COLORS
 
     transform = transforms
     if isinstance(transforms, list):
         transform = compose_transforms(transforms, clear)
     
-    transform = from_blender_to_habitat @ transform
+    transform = rotx90minus @ transform @ rotx90plus
 
     flattened = []
     for row in transform[:3]:
