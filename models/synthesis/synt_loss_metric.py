@@ -51,12 +51,12 @@ class SceneEditingAndSynthesisLoss(nn.Module):
 
     def forward(self, pred_img, gt_img, pred_seg, gt_seg, input_mask, gt_output_mask):
         synthesis_results = self.synthesis_loss(pred_img, gt_img, input_mask, gt_output_mask)
-        scene_editing_results, pred_output_mask = self.scene_editing_loss(pred_seg, gt_seg, input_mask, gt_output_mask)
+        scene_editing_results = self.scene_editing_loss(pred_seg, gt_seg, input_mask, gt_output_mask)
 
         results = {**synthesis_results, **scene_editing_results}
         results["Total Loss"] = synthesis_results["Total Loss"] + scene_editing_results["Total Loss"]
 
-        return results, pred_output_mask
+        return results
 
 
 class SceneEditingLoss(nn.Module):
@@ -75,6 +75,7 @@ class SceneEditingLoss(nn.Module):
         if torch.cuda.is_available():
             self.region_lp = self.region_lp.cuda()
 
+    '''
     def calculate_predicted_mask(self, pred_seg, gt_seg, gt_output_mask):
         # TODO how to vectorize this?
         bs = gt_output_mask.shape[0]
@@ -101,7 +102,6 @@ class SceneEditingLoss(nn.Module):
         # mulitply 3x boolean values. Will only be True, when all are True (is a differentiable way of doing bitwise_and)
         pred_output_mask = (pred_output_mask_per_channel[:, 0] * pred_output_mask_per_channel[:, 1] * pred_output_mask_per_channel[:, 2]).unsqueeze(1)
 
-        '''
         for i in range(bs):
             import matplotlib.pyplot as plt
             plt.imshow(pred_img[i].permute((1,2,0)).cpu().detach().numpy())
@@ -115,22 +115,23 @@ class SceneEditingLoss(nn.Module):
 
             plt.imshow(pred_output_mask[i].squeeze().cpu().detach().numpy().squeeze())
             plt.show()
-        '''
 
         return pred_output_mask
+    '''
 
     def forward(self, pred_seg, gt_seg, input_mask, gt_output_mask):
         # calculate predicted_mask
-        pred_output_mask = self.calculate_predicted_mask(pred_seg, gt_seg, gt_output_mask)
+        # pred_output_mask = self.calculate_predicted_mask(pred_seg, gt_seg, gt_output_mask)
 
         # pass to lp region loss: higher_region is everything that was moved (input, gt, pred), lower_region is the rest (unmoved pixels)
-        merged_output_mask = (pred_output_mask > 0) | gt_output_mask | input_mask
+        #merged_output_mask = (pred_output_mask > 0) | gt_output_mask | input_mask
+        merged_output_mask = gt_output_mask | input_mask
         region_lp = self.region_lp(pred_seg, gt_seg, ~merged_output_mask, merged_output_mask)
 
         # create dict containing both results
         region_lp["Total Loss"] = region_lp["Total Loss"] * self.weight
 
-        return region_lp, pred_output_mask
+        return region_lp #, pred_output_mask
 
 
 class MovementConsistencyLoss(nn.Module):
@@ -347,13 +348,12 @@ class SynthesisLoss(nn.Module):
 
 class QualityMetrics(nn.Module):
     """
-    Class for simultaneous calculation of known image quality metrics PSNR, SSIM and REGSIM.
+    Class for simultaneous calculation of known image quality metrics PSNR, SSIM.
     Metrics to use should be passed as argument.
 
     PSNR, SSIM will be calculated for both rgb and seg predictions.
-    REGSIM will only be calculated for segmentation predictions (see RegionSimilarity class in losses.py).
     """
-    def __init__(self, metrics=["PSNR", "SSIM", "REGSIM"], ignore_rgb_at_scene_editing_masks=True):
+    def __init__(self, metrics=["PSNR", "SSIM"], ignore_rgb_at_scene_editing_masks=True):
         super().__init__()
 
         print("Metric names:", *metrics)
@@ -369,8 +369,6 @@ class QualityMetrics(nn.Module):
             metric = PSNR()
         elif name == "SSIM":
             metric = SSIM()
-        elif name =="REGSIM":
-            metric = RegionSimilarity()
         else:
             raise ValueError("Invalid metric name in QualityMetrics: " + name)
         # TODO: If needed, more metric classes can be introduced here later on.
@@ -378,7 +376,7 @@ class QualityMetrics(nn.Module):
         if torch.cuda.is_available():
             return metric.cuda()
 
-    def forward(self, pred_img, gt_img, pred_seg, gt_seg, pred_output_mask=None, gt_output_mask=None, input_mask=None):
+    def forward(self, pred_img, gt_img, pred_seg, gt_seg, gt_output_mask=None, input_mask=None):
         """
         For each metric function provided, evaluate the function with prediction and target.
         Output is returned in "results" dict.
@@ -416,11 +414,6 @@ class QualityMetrics(nn.Module):
                 # add to overall output dict
                 results.update(out_rgb)
                 results.update(out_seg)
-
-            elif isinstance(func, RegionSimilarity) and pred_output_mask is not None and gt_output_mask is not None:
-                # calculate for masks and add to result
-                out = func(pred_output_mask, gt_output_mask)
-                results.update(out)
             else:
                 raise ValueError("Invalid metric in QualityMetrics: " + func)
 

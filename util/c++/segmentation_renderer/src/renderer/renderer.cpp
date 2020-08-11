@@ -206,7 +206,7 @@ void processInput(GLFWwindow *window, Renderer &renderer, int* imgCounter)
         if (!colorImage.empty()) {
             std::stringstream image_filename;
             char image_name[30];
-            sprintf(image_name, "scene_00_%04d.png", *imgCounter);
+            sprintf(image_name, "scene_00_%04d.seg.png", *imgCounter);
             image_filename << image_name;
             cv::imwrite(image_filename.str(), colorImage);
 

@@ -63,7 +63,8 @@ class ICLNUIM_Dynamic_Dataset(ICLNUIMDataset):
 
         if len(moved_img_gt_rgb) != len(img_seg):
             print("No moved gt rgb images for evaluation found in: {}".format(self.path))
-            moved_img_gt_rgb = None
+            moved_img_gt_rgb = img_rgb.copy()
+            moved_img_gt_rgb.extend(img_rgb.copy())
 
         # load moved depth and depth.npy
         moved_depth = sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if f.endswith('.gl.depth')])
@@ -276,6 +277,38 @@ def test():
 
     plt.show()
 
+def test_concat():
+    size = 256
+
+    transform = torchvision.transforms.Compose([
+        #torchvision.transforms.Resize((size, size)),
+        torchvision.transforms.ToTensor(),
+    ])
+
+    d = []
+    for dir in os.listdir("/home/lukas/Desktop/datasets/ICL-NUIM/custom/"):
+        path = os.path.join("/home/lukas/Desktop/datasets/ICL-NUIM/custom/", dir)
+        if os.path.isdir(path):
+            d.append(ICLNUIM_Dynamic_Dataset(path,
+                             input_as_segmentation=False,
+                             sampleOutput=True,
+                             output_from_other_view=True,
+                             inverse_depth=False,
+                             cacheItems=False,
+                             transform=transform))
+
+    dataset = torch.utils.data.ConcatDataset(d)
+
+    dataloader = torch.utils.data.DataLoader(dataset,
+                                               batch_size=2,
+                                               shuffle=True,
+                                               num_workers=1)
+
+    for idx, sample in enumerate(dataloader):
+        print(idx)
+
+
 if __name__ == "__main__":
     # execute only if run as a script
+    test_concat()
     test()

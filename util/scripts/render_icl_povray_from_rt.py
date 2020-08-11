@@ -4,12 +4,14 @@ import json
 
 import numpy as np
 
+import os
+import shutil
+
 from tempfile import mkstemp
 from shutil import move, copymode
 from os import fdopen, remove, path
 
 from data.nuim_dynamics_dataloader import ICLNUIM_Dynamic_Dataset
-
 
 def modify_pov_mesh(povray_icl_folder, icl_dataset):
     # load dynamics
@@ -108,28 +110,65 @@ if __name__ == '__main__':
     if len(sys.argv) != 3 and len(sys.argv) != 4:
         raise ValueError('Usage: ' + sys.argv[0] + ' <path_to_icl_with_camera_angles> <path_to_povray_icl_folder> (<path_to_moved.txt>)')
 
-    d = ICLNUIM_Dynamic_Dataset(sys.argv[1])
+    remaining_seqs = ["seq0007", "seq0008", "seq0009", "seq0010", "seq0011", "seq0012", "seq0013", "seq0014", "seq0015", "seq0016", "seq0017", "seq0018", "seq0019"]
 
-    if len(sys.argv) == 4:
-        modify_pov_mesh(sys.argv[2], d)
+    for seq in remaining_seqs:
+        print(sys.argv)
+        sys.argv[1] = "/home/lukas/Desktop/datasets/ICL-NUIM/custom/" + seq
+        sys.argv[3] = "/home/lukas/Desktop/datasets/ICL-NUIM/custom/" + seq + "/moved.txt"
+        print(sys.argv)
 
-    for i in range(d.__len__()):
-        item = d.__getitem__(i)
-        RT = item['cam']['RT1']
-        RTinv = item['cam']['RT1inv']
-        print(RT)
+        # ORIG
+        d = ICLNUIM_Dynamic_Dataset(sys.argv[1])
 
-        bashCommand = f'povray +Iliving_room.pov +Oscene_00_{i:04d}.png +W640 +H480 ' \
-                      f'Declare=val00={RT[0,0]} Declare=val01={RT[1,0]} Declare=val02={RT[2,0]} ' \
-                      f'Declare=val10={RT[0,1]} Declare=val11={RT[1,1]} Declare=val12={RT[2,1]} ' \
-                      f'Declare=val20={RT[0,2]} Declare=val21={RT[1,2]} Declare=val22={RT[2,2]} ' \
-                      f'Declare=val30={RT[0,3]}  Declare=val31={RT[1,3]} Declare=val32={RT[2,3]} ' \
-                      f'+FN16 +wt1 -d +L/usr/share/povray-3.7/include Declare=use_baking=2 +A0.0'
+        for i in range(d.__len__()):
+            item = d.__getitem__(i)
+            RT = item['cam']['RT1']
+            RTinv = item['cam']['RT1inv']
+            print(RT)
 
-        print(bashCommand)
+            bashCommand = f'povray +Iliving_room.pov +Oscene_00_{i:04d}.png +W640 +H480 ' \
+                          f'Declare=val00={RT[0, 0]} Declare=val01={RT[1, 0]} Declare=val02={RT[2, 0]} ' \
+                          f'Declare=val10={RT[0, 1]} Declare=val11={RT[1, 1]} Declare=val12={RT[2, 1]} ' \
+                          f'Declare=val20={RT[0, 2]} Declare=val21={RT[1, 2]} Declare=val22={RT[2, 2]} ' \
+                          f'Declare=val30={RT[0, 3]}  Declare=val31={RT[1, 3]} Declare=val32={RT[2, 3]} ' \
+                          f'+FN16 +wt1 -d +L/usr/share/povray-3.7/include Declare=use_baking=2 -A'
+            # +A0.0
 
-        process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE, cwd=sys.argv[2])
-        output, error = process.communicate()
+            print(bashCommand)
 
-        print(output)
-        print(error)
+            process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE, cwd=sys.argv[2])
+            output, error = process.communicate()
+
+        for file in os.listdir(sys.argv[2]):
+            if "scene" in file and ".png" in file:
+                shutil.move(os.path.join(sys.argv[2], file), os.path.join(sys.argv[1], "original", file))
+
+        # MOVED
+        if len(sys.argv) == 4:
+            d = ICLNUIM_Dynamic_Dataset(sys.argv[1])
+            modify_pov_mesh(sys.argv[2], d)
+
+            for i in range(d.__len__()):
+                item = d.__getitem__(i)
+                RT = item['cam']['RT1']
+                RTinv = item['cam']['RT1inv']
+                print(RT)
+
+                bashCommand = f'povray +Iliving_room.pov +Oscene_00_{i:04d}.png +W640 +H480 ' \
+                              f'Declare=val00={RT[0,0]} Declare=val01={RT[1,0]} Declare=val02={RT[2,0]} ' \
+                              f'Declare=val10={RT[0,1]} Declare=val11={RT[1,1]} Declare=val12={RT[2,1]} ' \
+                              f'Declare=val20={RT[0,2]} Declare=val21={RT[1,2]} Declare=val22={RT[2,2]} ' \
+                              f'Declare=val30={RT[0,3]}  Declare=val31={RT[1,3]} Declare=val32={RT[2,3]} ' \
+                              f'+FN16 +wt1 -d +L/usr/share/povray-3.7/include Declare=use_baking=2 -A'
+                # +A0.0
+
+                print(bashCommand)
+
+                process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE, cwd=sys.argv[2])
+                output, error = process.communicate()
+
+            for file in os.listdir(sys.argv[2]):
+                if "scene" in file and ".png" in file:
+                    shutil.move(os.path.join(sys.argv[2], file), os.path.join(sys.argv[1], "moved", file))
+
