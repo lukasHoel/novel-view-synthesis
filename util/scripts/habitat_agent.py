@@ -58,29 +58,41 @@ def make_cfg(settings):
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = sensor_specs
     agent_cfg.action_space = {
+        "move_up": habitat_sim.agent.ActionSpec(
+            "move_up", habitat_sim.agent.ActuationSpec(amount=0.25)
+        ),
+        "move_down": habitat_sim.agent.ActionSpec(
+            "move_down", habitat_sim.agent.ActuationSpec(amount=0.25)
+        ),
         "move_forward": habitat_sim.agent.ActionSpec(
             "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
-        ),
-        "move_backward": habitat_sim.agent.ActionSpec(
-            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
         "move_right": habitat_sim.agent.ActionSpec(
             "move_right", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
+        "move_backward": habitat_sim.agent.ActionSpec(
+            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.25)
+        ),
         "move_left": habitat_sim.agent.ActionSpec(
             "move_left", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
-        "turn_left": habitat_sim.agent.ActionSpec(
-            "turn_left", habitat_sim.agent.ActuationSpec(amount=15.0)
-        ),
         "turn_right": habitat_sim.agent.ActionSpec(
-            "turn_right", habitat_sim.agent.ActuationSpec(amount=15.0)
+            "turn_right", habitat_sim.agent.ActuationSpec(amount=10.0)
+        ),
+        "turn_left": habitat_sim.agent.ActionSpec(
+            "turn_left", habitat_sim.agent.ActuationSpec(amount=10.0)
         ),
         "look_up": habitat_sim.agent.ActionSpec(
-            "look_up", habitat_sim.agent.ActuationSpec(amount=1)
+            "look_up", habitat_sim.agent.ActuationSpec(amount=10)
+        ),
+        "look_right": habitat_sim.agent.ActionSpec(
+            "look_right", habitat_sim.agent.ActuationSpec(amount=10)
         ),
         "look_down": habitat_sim.agent.ActionSpec(
-            "look_down", habitat_sim.agent.ActuationSpec(amount=1)
+            "look_down", habitat_sim.agent.ActuationSpec(amount=10)
+        ),
+        "look_left": habitat_sim.agent.ActionSpec(
+            "look_left", habitat_sim.agent.ActuationSpec(amount=10)
         ),
     }
     
@@ -180,6 +192,11 @@ def query_seg_color(objID):
     img = Image.fromarray(color, mode="RGB")
     img.show()
 
+class LogQt(QPlainTextEdit):
+    def __init__(self):
+        super(LogQt, self).__init__()
+        self.setFocusPolicy(Qt.ClickFocus)
+
 class MainWindow(QWidget):
     def __init__(self, sim, agent, state_hist, output_path):
         super().__init__()
@@ -188,14 +205,16 @@ class MainWindow(QWidget):
         self.state_hist = state_hist
         self.output_path = output_path
         self.action_map = {
-            Qt.Key_4: "turn_left",
-            Qt.Key_6: "turn_right",
-            Qt.Key_8: "look_up",
-            Qt.Key_5: "look_down",
+            Qt.Key_Z: "move_up",
+            Qt.Key_X: "move_down",
             Qt.Key_W: "move_forward",
-            Qt.Key_A: "move_left",
+            Qt.Key_D: "move_right",
             Qt.Key_S: "move_backward",
-            Qt.Key_D: "move_right"
+            Qt.Key_A: "move_left",
+            Qt.Key_Right: "turn_right",
+            Qt.Key_Left: "turn_left",
+            Qt.Key_Up: "look_up",
+            Qt.Key_Down: "look_down",
         }
         self.initialize()
         
@@ -210,7 +229,15 @@ class MainWindow(QWidget):
         
         dep_img = ImageQt(dep_img)
         dep_img = QPixmap.fromImage(dep_img)
-        return rgb_img, sem_img, dep_img 
+        return rgb_img, sem_img, dep_img
+
+    def log_format(self, sensor_state):
+        x = sensor_state.rotation.x
+        y = sensor_state.rotation.y
+        z = sensor_state.rotation.z
+        w = sensor_state.rotation.w
+        log = "t: {}, Position: ({:.5f},{:.5f},{:.5f}), Orientation: ({:.5f},{:.5f},{:.5f},{:.5f})\n".format(self.timestep, *sensor_state.position, x, y, z, w)
+        return log
         
     def initialize(self):
         self.title = "Habitat Agent"
@@ -220,6 +247,7 @@ class MainWindow(QWidget):
         self.height = 456
         self.timestep = 0
         
+        self.setFocusPolicy(Qt.StrongFocus)
         hbox = QHBoxLayout()
         
         rgb_panel = QFrame()
@@ -234,8 +262,9 @@ class MainWindow(QWidget):
         dep_panel.setFrameShape(QFrame.StyledPanel)
         self.dep_panel = QLabel(dep_panel)
         
-        self.info_panel = info_panel = QPlainTextEdit()
+        self.info_panel = info_panel = LogQt()
         info_panel.setReadOnly(True)
+        info_panel.installEventFilter(info_panel)
 
         split1 = QSplitter(Qt.Horizontal)
         split1.addWidget(rgb_panel)
@@ -255,15 +284,16 @@ class MainWindow(QWidget):
         
         # Render images on respective windows
         observations = self.sim.get_sensor_observations()
-        agent_state = self.agent.get_state()
-        # P, Pinv = get_camera_matrices(agent_state.position, agent_state.rotation)
+        sensor_state = self.agent.get_state().sensor_states["color_sensor"]
+        # P, Pinv = get_camera_matrices(sensor_state.position, sensor_state.rotation)
         
         rgb, seg, dep = self.get_imageQt(observations)
         self.rgb_panel.setPixmap(rgb)
         self.seg_panel.setPixmap(seg)
         self.dep_panel.setPixmap(dep)
 
-        log = "t: {}, Position: {}, Orientation: {}".format(self.timestep, agent_state.position, agent_state.rotation)
+        # print("t:{}, Position: {}, Orientation: {}".format(self.timestep, self.agent.get_state().position, self.agent.get_state().rotation))
+        log = self.log_format(sensor_state)
         self.info_panel.appendPlainText(log)
         
         self.setLayout(hbox)
@@ -275,7 +305,7 @@ class MainWindow(QWidget):
     def keyPressEvent(self, event):
         key = event.key()
         # Clear logger
-        if key == Qt.Key_C:
+        if key == Qt.Key_R:
             self.info_panel.clear()
         
         # Close window
@@ -305,20 +335,27 @@ class MainWindow(QWidget):
             observations = self.sim.step(action)
             self.timestep += 1
             
-            agent_state = self.agent.get_state()
-            # P, Pinv = get_camera_matrices(agent_state.position, agent_state.rotation)
+            sensor_state = self.agent.get_state().sensor_states["color_sensor"]
+            # P, Pinv = get_camera_matrices(sensor_state.position, sensor_state.rotation)
             
             rgb, seg, dep = self.get_imageQt(observations)
             self.rgb_panel.setPixmap(rgb)
             self.seg_panel.setPixmap(seg)
             self.dep_panel.setPixmap(dep)
             
-            log = "t:{}, Position: {}, Orientation: {}".format(self.timestep, agent_state.position, agent_state.rotation)
+            # print("t:{}, Position: {}, Orientation: {}".format(self.timestep, self.agent.get_state().position, self.agent.get_state().rotation))
+            log = self.log_format(sensor_state)
             self.info_panel.appendPlainText(log)
 
 def init_sim(sim_settings, start_pos, start_rot):
     cfg = make_cfg(sim_settings)
     sim = habitat_sim.Simulator(cfg)
+
+    # Actions should change the position of the agent as well.
+    action = habitat_sim.registry.get_move_fn("move_up")
+    action.body_action = True
+    action = habitat_sim.registry.get_move_fn("move_down")
+    action.body_action = True
 
     random.seed(sim_settings["seed"])
     sim.seed(sim_settings["seed"])

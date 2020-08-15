@@ -38,6 +38,15 @@ blender_init()
 # Then, call this function with inverted composite transformation. It's a good debug tool.
 # transform_selection(transform)
 
+# Compose all transformations performed up to this call. 
+# "transforms" list automatically keeps them in the correct order. 
+# Set clear flag to empty the list.
+# compose_transforms(transforms, clear=True):
+
+# Pass a single (composite) transform matrix or a list of transform matrices (in this case, it will be composed automatically)
+# Exports moved.txt file containing transformation matrix and ID of the object (here: 12) that was transformed.
+# export_moved_info(path, transforms, 12, clear=True):
+
 # Finally, export modified mesh with:
 # exporter(OUTPUT_PATH)
 
