@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import pickle
 import random
 import os
 import sys
@@ -198,11 +197,11 @@ class LogQt(QPlainTextEdit):
         self.setFocusPolicy(Qt.ClickFocus)
 
 class MainWindow(QWidget):
-    def __init__(self, sim, agent, state_hist, output_path):
+    def __init__(self, sim, agent, action_hist, output_path):
         super().__init__()
         self.sim = sim
         self.agent = agent
-        self.state_hist = state_hist
+        self.action_hist = action_hist
         self.output_path = output_path
         self.action_map = {
             Qt.Key_Z: "move_up",
@@ -246,6 +245,7 @@ class MainWindow(QWidget):
         self.width = 256*3
         self.height = 456
         self.timestep = 0
+        self.sample_count = 0
         
         self.setFocusPolicy(Qt.StrongFocus)
         hbox = QHBoxLayout()
@@ -312,16 +312,16 @@ class MainWindow(QWidget):
         elif key == Qt.Key_Escape:
             self.close()
         
-        # Save current observation
+        # Save current observation and an action indicating a sample needs to be drawn:
         elif key == Qt.Key_P:
             observations = self.sim.get_sensor_observations()
-            agent_state = self.agent.get_state()
-            file_index = len(self.state_hist)
-            self.state_hist.append(agent_state)
-            data = collect_all_data(observations, agent_state)
-            save_data(self.output_path, file_index, *data)
+            sensor_state = self.agent.get_state().sensor_states["color_sensor"]
+            data = collect_all_data(observations, sensor_state)
+            save_data(self.output_path, self.sample_count, *data)
             log = "Saving data at t:{}".format(self.timestep)
             self.info_panel.appendPlainText(log)
+            self.action_hist.append("save\n")
+            self.sample_count += 1
             
         # TODO: Adjustable speed
         elif key == Qt.Key_Plus:
@@ -333,6 +333,7 @@ class MainWindow(QWidget):
         elif key in self.action_map:
             action = self.action_map[key]
             observations = self.sim.step(action)
+            self.action_hist.append(action)
             self.timestep += 1
             
             sensor_state = self.agent.get_state().sensor_states["color_sensor"]
@@ -374,6 +375,10 @@ def main(argv):
         print("Required 4 args: \n(1) scene_ply\n(2) output_path\n(3) start_pos\n(4) start_rot\n")
         exit(-1)
 
+    # Remove habitat logs
+    os.environ["GLOG_minloglevel"] = "0"
+    os.environ["MAGNUM_LOG"] = "quiet"
+
     scene_ply = argv[0]
     output_path = argv[1]
     start_pos = eval(argv[2])
@@ -398,7 +403,7 @@ def main(argv):
     }
 
     sim, agent, cfg = init_sim(sim_settings, start_pos, start_rot)
-    state_hist = [] # Keep agent state when a sample is taken
+    action_hist = [] # Keep agent actions
 
     action_names = list(
         cfg.agents[
@@ -408,14 +413,17 @@ def main(argv):
 
     # Control agent with GUI
     app = QApplication([])
-    window = MainWindow(sim, agent, state_hist, output_path)
+    window = MainWindow(sim, agent, action_hist, output_path)
     window.show()
     app.exec_()
 
     # Simulation ends:
-    # Save trajectory used for sampling
-    with open(os.path.join(output_path, "trajectory.txt"), "wb+") as file:
-        pickle.dump(state_hist, file)
+    # Save actions taken during the simulation
+    with open(os.path.join(output_path, "actions.txt"), "w+") as file:
+        file.write(str(start_pos) + "\n")
+        file.write(str(start_rot) + "\n")
+        content = "\n".join(action_hist)
+        file.write(content)
 
 # Execute only if run as a script
 if __name__ == "__main__":

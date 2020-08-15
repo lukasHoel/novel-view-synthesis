@@ -1,4 +1,3 @@
-import pickle
 import random
 import os
 import sys
@@ -50,29 +49,41 @@ def make_cfg(settings):
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = sensor_specs
     agent_cfg.action_space = {
+        "move_up": habitat_sim.agent.ActionSpec(
+            "move_up", habitat_sim.agent.ActuationSpec(amount=0.25)
+        ),
+        "move_down": habitat_sim.agent.ActionSpec(
+            "move_down", habitat_sim.agent.ActuationSpec(amount=0.25)
+        ),
         "move_forward": habitat_sim.agent.ActionSpec(
             "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
-        ),
-        "move_backward": habitat_sim.agent.ActionSpec(
-            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
         "move_right": habitat_sim.agent.ActionSpec(
             "move_right", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
+        "move_backward": habitat_sim.agent.ActionSpec(
+            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.25)
+        ),
         "move_left": habitat_sim.agent.ActionSpec(
             "move_left", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
-        "turn_left": habitat_sim.agent.ActionSpec(
-            "turn_left", habitat_sim.agent.ActuationSpec(amount=15.0)
-        ),
         "turn_right": habitat_sim.agent.ActionSpec(
-            "turn_right", habitat_sim.agent.ActuationSpec(amount=15.0)
+            "turn_right", habitat_sim.agent.ActuationSpec(amount=10.0)
+        ),
+        "turn_left": habitat_sim.agent.ActionSpec(
+            "turn_left", habitat_sim.agent.ActuationSpec(amount=10.0)
         ),
         "look_up": habitat_sim.agent.ActionSpec(
-            "look_up", habitat_sim.agent.ActuationSpec(amount=1)
+            "look_up", habitat_sim.agent.ActuationSpec(amount=10)
+        ),
+        "look_right": habitat_sim.agent.ActionSpec(
+            "look_right", habitat_sim.agent.ActuationSpec(amount=10)
         ),
         "look_down": habitat_sim.agent.ActionSpec(
-            "look_down", habitat_sim.agent.ActuationSpec(amount=1)
+            "look_down", habitat_sim.agent.ActuationSpec(amount=10)
+        ),
+        "look_left": habitat_sim.agent.ActionSpec(
+            "look_left", habitat_sim.agent.ActuationSpec(amount=10)
         ),
     }
     
@@ -163,36 +174,54 @@ def save_data(path, index, rgb, sem, dep, Pinv):
     with open(os.path.join(path, file_name + ".txt"), 'w+') as f:
         f.write(info)
 
-def init_sim(sim_settings, state):
+def init_sim(sim_settings, start_pos, start_rot):
     cfg = make_cfg(sim_settings)
     sim = habitat_sim.Simulator(cfg)
+
+    # Actions should change the position of the agent as well.
+    action = habitat_sim.registry.get_move_fn("move_up")
+    action.body_action = True
+    action = habitat_sim.registry.get_move_fn("move_down")
+    action.body_action = True
 
     random.seed(sim_settings["seed"])
     sim.seed(sim_settings["seed"])
 
     # Set agent state
     agent = sim.initialize_agent(sim_settings["default_agent"])
-    agent.set_state(state)
+    agent_state = habitat_sim.AgentState()
+    agent_state.position = np.array(start_pos)               # Agent start position set
+    agent_state.rotation = quaternion.quaternion(*start_rot) # Agent start orientation set
+    agent.set_state(agent_state)
 
     return sim, agent, cfg
 
 def main(argv):
-    if len(argv) < 3:
-        print("Required 4 args: \n(1) scene_ply\n(2) traj_path\n(3) output_path\n")
+    if len(argv) < 4:
+        print("Required 4 args: \n(1) scene_ply\n(2) traj_path\n(3) output_path (4) visualize\n")
         exit(-1)
+
+    # Remove habitat logs
+    os.environ["GLOG_minloglevel"] = "0"
+    os.environ["MAGNUM_LOG"] = "quiet"
 
     scene_ply = argv[0]
     traj_path = argv[1]
     output_path = argv[2]
-    DISPLAY = True
+    DISPLAY = bool(argv[3])
     print(output_path)
 
-    state_hist = None # State of agent whenever a sample was taken
+    start_pos = None
+    start_rot = None
+    action_hist = None # State of agent whenever a sample was taken
 
-    with open(traj_path, "rb") as file:
-        state_hist = pickle.load(file)
+    with open(traj_path, "r") as file:
+        content = [line[:-1] for line in file.readlines()]
+        start_pos = eval(content[0])
+        start_rot = eval(content[1])
+        action_hist = content[2:]
 
-    print(state_hist)
+    # print(action_hist)
 
     try:
         os.mkdir(output_path)
@@ -212,17 +241,32 @@ def main(argv):
         "seed": 1,
     }
 
-    sim, agent, cfg = init_sim(sim_settings, state_hist[0])
+    sim, agent, cfg = init_sim(sim_settings, start_pos, start_rot)
+    sample_count = 0
 
     # Open unmodified scene and sample images from the same trajectory without GUI
-    for time, state in enumerate(state_hist):
-        agent.set_state(state)
-        observations = sim.get_sensor_observations()
-        if DISPLAY:
-           display_sample(observations)
-        data = collect_all_data(observations, state)
-        save_data(output_path, time, *data)
+    for time, action in enumerate(action_hist):
+        sensor_state = agent.get_state().sensor_states["color_sensor"]
+        x = sensor_state.rotation.x
+        y = sensor_state.rotation.y
+        z = sensor_state.rotation.z
+        w = sensor_state.rotation.w
+        # Take a sample only, don't move
+        if action == "save":
+            print("Saving sample: ", sample_count)
+            observations = sim.get_sensor_observations()
+            data = collect_all_data(observations, sensor_state)
+            save_data(output_path, sample_count, *data)
+            sample_count += 1
+            # Display saved sample
+            if DISPLAY:
+                display_sample(observations)
 
+        # Move only, don't take a sample
+        else:
+            log = "Action taken: {}, Position: ({:.5f},{:.5f},{:.5f}), Orientation: ({:.5f},{:.5f},{:.5f},{:.5f})\n".format(action, *sensor_state.position, x, y, z, w)
+            agent.act(action)
+            print(log)
 # Execute only if run as a script
 if __name__ == "__main__":
     main(sys.argv[1:])
