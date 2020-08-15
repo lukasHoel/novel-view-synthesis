@@ -58,40 +58,40 @@ def make_cfg(settings):
     agent_cfg.sensor_specifications = sensor_specs
     agent_cfg.action_space = {
         "move_up": habitat_sim.agent.ActionSpec(
-            "move_up", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_up", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_down": habitat_sim.agent.ActionSpec(
-            "move_down", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_down", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_forward": habitat_sim.agent.ActionSpec(
-            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_right": habitat_sim.agent.ActionSpec(
-            "move_right", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_right", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_backward": habitat_sim.agent.ActionSpec(
-            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_left": habitat_sim.agent.ActionSpec(
-            "move_left", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_left", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "turn_right": habitat_sim.agent.ActionSpec(
-            "turn_right", habitat_sim.agent.ActuationSpec(amount=10.0)
+            "turn_right", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "turn_left": habitat_sim.agent.ActionSpec(
-            "turn_left", habitat_sim.agent.ActuationSpec(amount=10.0)
+            "turn_left", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_up": habitat_sim.agent.ActionSpec(
-            "look_up", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_up", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_right": habitat_sim.agent.ActionSpec(
-            "look_right", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_right", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_down": habitat_sim.agent.ActionSpec(
-            "look_down", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_down", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_left": habitat_sim.agent.ActionSpec(
-            "look_left", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_left", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
     }
     
@@ -323,11 +323,35 @@ class MainWindow(QWidget):
             self.action_hist.append("save\n")
             self.sample_count += 1
             
-        # TODO: Adjustable speed
+        # Increase translational & angular speed
         elif key == Qt.Key_Plus:
-            agent.agent_config.action_space["move_forward"].actuation.amount += 0.1
+            actions = self.agent.agent_config.action_space
+            for k,v in actions.items():
+                if "move" in k:
+                    actions[k].actuation.amount += 0.05
+                else:
+                    actions[k].actuation.amount += 5
+            translational = actions["move_up"].actuation.amount
+            angular = actions["look_up"].actuation.amount
+            log = "Speed increased. Curently translational speed: {:.2f} angular speed: {:.2f}\n".format(translational, angular)
+            self.info_panel.appendPlainText(log)
+
+        # Decrease translational & angular speed
         elif key == Qt.Key_Minus:
-            agent.agent_config.action_space["move_forward"].actuation.amount -= 0.1
+            actions = self.agent.agent_config.action_space
+            for k,v in actions.items():
+                if "move" in k:
+                    tmp = actions[k].actuation.amount - 0.05
+                    if tmp >= 0:
+                        actions[k].actuation.amount = tmp
+                else:
+                    tmp = actions[k].actuation.amount - 5
+                    if tmp >= 0:
+                        actions[k].actuation.amount = tmp
+            translational = actions["move_up"].actuation.amount
+            angular = actions["look_up"].actuation.amount
+            log = "Speed decreased. Curently translational speed: {:.2f} angular speed: {:.2f}\n".format(translational, angular)
+            self.info_panel.appendPlainText(log)
         
         # Take an action
         elif key in self.action_map:
