@@ -1,10 +1,10 @@
 import bpy
 import bmesh
 import json
-import os
 import struct
-import math
 import mathutils
+import numpy as np
+from scipy.spatial.transform import Rotation
 
 HEADER = \
 "ply\n" + \
@@ -63,7 +63,7 @@ SEG_COLORS = [[0.12156863, 0.46666667, 0.70588235],
               [0.80784314, 0.42745098, 0.74117647],
               [0.87058824, 0.61960784, 0.83921569]]
 
-#              Global variables used frequently in functions
+# Global variables used frequently in functions
 obj = obj_data = mesh = VERTEX_COUNT = FACE_COUNT = None
 
 vertex_to_rgb = []
@@ -74,18 +74,20 @@ objID_to_face = {}
 # Later transformation matrices can be composed with compose_transforms function
 transforms = []
 
-rotx90minus = mathutils.Matrix([[1,  0, 0, 0], 
-                             [0,  0, 1, 0], 
-                             [0, -1, 0, 0],
-                             [0,  0, 0, 1]])
-rotx90plus = rotx90minus.inverted()
+rotx90minus = np.array([[1.0,  0.0, 0.0, 0.0], 
+                        [0.0,  0.0, 1.0, 0.0], 
+                        [0.0, -1.0, 0.0, 0.0],
+                        [0.0,  0.0, 0.0, 1.0]])
+rotx90plus = np.linalg.inv(rotx90minus)
 
 def blender_init():
     """
     Sets global variables that are required for scene manipulation. 
     Undoing an action may delete existing global variables. If that's the case, call this method again.
     """
+
     global obj, obj_data, mesh, VERTEX_COUNT, FACE_COUNT
+    
     # Retrieve data from blender
     obj = bpy.context.object              # Get mesh in the scene
     bpy.ops.object.mode_set(mode='EDIT')  # Put blender into edit mode
@@ -102,6 +104,7 @@ def blender_init():
 
 def importer(path):
     global vertex_to_rgb, face_to_objID, objID_to_face
+    
     vertex_to_rgb.clear()
     face_to_objID.clear()
     objID_to_face.clear()
@@ -226,6 +229,7 @@ def exporter(path):
             ply.write(buf)
             
 def get_objID_of_selection():
+    """Get object IDs of selected faces"""
     global mesh, face_to_objID
 
     # Face info for selection
@@ -233,9 +237,11 @@ def get_objID_of_selection():
         if f.select:
             face_idx = f.index  # Blender idx (zero-indexed) -> PLY file line idx (zero-indexed)
             objID = face_to_objID[face_idx]
-            print("Face ID: {} belongs has the object ID: {}".format(face_idx, objID))
+            print("Face ID: {} has the object ID: {}".format(face_idx, objID))
                 
 def select_faces_of_obj(objID, sel_extend=False):
+    """Get all faces bound to a specific object"""
+    
     global objID_to_face, mesh, obj_data
 
     # Deselect all previous if extended selection is not desired
@@ -251,17 +257,19 @@ def select_faces_of_obj(objID, sel_extend=False):
     bmesh.update_edit_mesh(obj_data, True)
     
 def get_objIDs_of_vertex(v):
+    """Get all objID's bound to a specific vertex v"""
+    
     global face_to_objID
 
-    """Get all objID's bound to a specific vertex v"""
     adj_faces = v.link_faces
     obj_ids = list(map(lambda x: face_to_objID[x.index], adj_faces))
     return obj_ids
     
 def cut_object(objID):
+    """Cuts the faces of objID from its neighbours. Faces whose one or more edges are removed are deleted."""
+    
     global objID_to_face, face_to_objID, mesh, obj_data
 
-    """Cuts the faces of objID from its neighbours. Faces whose one or more edges are removed are deleted."""
     idxs = objID_to_face[objID]
     del_faces = set()
     del_edges = set()
@@ -306,126 +314,119 @@ def cut_object(objID):
 
     bmesh.ops.delete(mesh, geom=list(del_edges), context="EDGES_FACES")
     bmesh.update_edit_mesh(obj_data, True)
+
+def get_rotation_matrix(angles, axes, square=True, in_degrees=True):
+    r = Rotation.from_euler(axes.upper(), angles, degrees=in_degrees).as_matrix()
+    R = np.eye(4)if square else np.eye(3,4)
+    R[0:3,0:3] = r
+    return R
+
+def get_translation_matrix(t, square=True):
+    T = np.eye(4) if square else np.eye(3, 4)
+    t = np.array([*t, 1]) if (square and len(t) == 3) else t
+    T[:,3] = t
+    return T
+
+def get_RT_matrix(angles, t, square=True, in_degrees=True):
+    """Specify rotation angles (as (rx, ry, rz)) and translation parameters (as (x,y,z)), return equivalent 3x4 or 4x4 transformation matrix"""
     
-def get_RT_matrix(angles, t, square=True, in_degrees=False):
-    """Specify rotation angles (as (rx, ry, rz) in radians by default) and translation parameters (as (x,y,z)), return equivalent 3x4 transformation matrix"""
-    if in_degrees:
-        angles = [math.radians(angle) for angle in angles]
-    # Get 4x4 rotation matrix
-    euler = mathutils.Euler(angles, 'XYZ')
-    RT = euler.to_matrix().to_4x4()
+    # Get 4x4 rotation matrix: Rx @ Ry @ Rz == 'XYZ'
+    RT = get_rotation_matrix(angles, 'XYZ', square=square, in_degrees=in_degrees)
     # Embed translation
-    RT.col[3] = mathutils.Vector((*t, 1))
-    if not square:
-      # Reduce to 3x4 RT
-      RT = mathutils.Matrix(RT[0:3])
+    t = np.array([*t, 1]) if (square and len(t) == 3) else t
+    RT[:,3] = t
     # Return overall RT matrix as 4x4 or 3x4 depending on square flag
     return RT
 
 def selection_center():
+    """Calculate the center of selected faces. Required for pivot point transform during rotation."""
+    
     global mesh
 
-    """Calculate the center of selected faces. Required for pivot point transform during rotation."""
-    selected_verts = list(filter(lambda v: v.select, mesh.verts))
-    coords = [v.co for v in selected_verts]
-    center = mathutils.Vector((0, 0, 0))
-    for c in coords:
-      center += c
-    center /= len(coords)
-    return center
+    selected_verts = filter(lambda v: v.select, mesh.verts)
+    selected_coords = np.array([v.co for v in selected_verts])
+    return selected_coords.mean(axis=0)
 
 def translate_selection(t, store=True):
-    global transforms
+    """Translate with t (given as (x,y,z)) using vertex coordinates of selected faces, return equivalent 4x4 translation matrix"""
+    
+    global mesh, obj_data, transforms
+    
+    t = mathutils.Vector(t)
+    for v in mesh.verts:
+      if v.select:
+        v.co += t
 
-    """Translate with t (x,y,z) using blender ops directly, return equivalent 4x4 translation matrix"""
-    bpy.ops.transform.translate(value=t, 
-                                orient_type='GLOBAL', 
-                                orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), 
-                                orient_matrix_type='GLOBAL', 
-                                constraint_axis=(False, True, False), 
-                                mirror=True, 
-                                use_proportional_edit=False, 
-                                proportional_edit_falloff='SMOOTH', 
-                                proportional_size=1, 
-                                use_proportional_connected=False, 
-                                use_proportional_projected=False, 
-                                release_confirm=True)
-    t_matrix = mathutils.Matrix.Translation(t)
+    t_matrix = get_translation_matrix(t)
     if store:
         transforms.append(t_matrix)
+
+    bmesh.update_edit_mesh(obj_data, True)
     return t_matrix
 
-def rotate_selection(angle, axis, store=True, in_degrees=False):
+def rotate_selection(angles, axes, store=True, in_degrees=True):
+    """Rotate vertices with one or more angles around one or more axis ('X','Y','Z'), return equivalent 4x4 rotation matrix."""
+    
     global mesh, transforms
-
-    """Rotate using blender ops directly (as float, in radians by default) around axis 'X', 'Y' or 'Z', return equivalent 4x4 rotation matrix."""
-    axis = axis.upper()
-    if axis not in ['X', 'Y', 'Z']:
-        return None
-    if in_degrees:
-        angle = math.radians(angle)
-    bpy.ops.transform.rotate(value=angle, 
-                             orient_axis=axis, 
-                             orient_type='GLOBAL', 
-                             orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), 
-                             orient_matrix_type='GLOBAL', 
-                             constraint_axis=(False, True, False), 
-                             mirror=True, 
-                             use_proportional_edit=False, 
-                             proportional_edit_falloff='SMOOTH', 
-                             proportional_size=1, 
-                             use_proportional_connected=False,
-                             use_proportional_projected=False, 
-                             release_confirm=True)
+    
     pivot = selection_center()
-    origin_map = mathutils.Matrix.Translation(-pivot)
-    rotation = mathutils.Matrix.Rotation(angle, 4, axis)
-    inv_origin_map = mathutils.Matrix.Translation(pivot)
-    rot_matrix = inv_origin_map @ rotation @ origin_map
+    origin_map = get_translation_matrix(-pivot, square=True)
+    R4 = get_rotation_matrix(angles, axes, square=True, in_degrees=in_degrees)
+    inv_origin_map = get_translation_matrix(pivot, square=True)
+    R4 = inv_origin_map @ R4 @ origin_map
+
+    # Extract 3x4 part and apply rotation on vertices around the center of selection.
+    R3 = R4[0:3]
+    for v in mesh.verts:
+      if v.select:
+        v_hom = np.array([*v.co, 1])
+        v_hom = (R3 @ v_hom).tolist()
+        v.co = mathutils.Vector(v_hom[0:3])
+
     if store:
-        transforms.append(rot_matrix)
-    return rot_matrix
-                             
+        transforms.append(R4)
+
+    bmesh.update_edit_mesh(obj_data, True)
+    return R4
+
 def transform_selection(transform, store=True):
     """
     Apply transformation matrix on selected vertices.
-    Note that blender ops not used. 
     This method can be used for testing the transformation matrix generated with composite transformations.
     Provided transformation matrix can also be stored in transforms if store flag is set.
     """
     global mesh, obj_data, transforms
-    if store and len(transform) == 4 and len(transform[0]) == 4:
-        transforms.append(transform)
 
-    if len(transform) == 4:
-        transform = mathutils.Matrix(transform[0:3])
-    selected_verts = list(filter(lambda v: v.select, mesh.verts))
-    for v in selected_verts:
-        v.co = transform @ mathutils.Vector((*v.co, 1))
+    if store:
+      if transform.shape == (3, 4):
+        transform = np.vstack((transform, [0, 0, 0, 1]))
+      transforms.append(transform)
+
+    # Extract 3x4 part and apply on vertices
+    transform = transform[0:3]
+    for v in mesh.verts:
+      if v.select:
+        v_hom = np.array([*v.co, 1])
+        v_hom = (transform @ v_hom).tolist()
+        v.co = mathutils.Vector(v_hom[0:3])
 
     bmesh.update_edit_mesh(obj_data, True)
 
 def compose_transforms(transforms, clear=True):
     """
-    Takes a list of 4x4 transformatiom matrices and returns the overall 4x4 matrix. 
+    Takes a list of 4x4 transformation matrices and returns the overall 4x4 matrix. 
     Assumes that the first item of the list is the first transformation and the last item of the list is the last transformation in the sequence.
     Set clear flag to empty processed list.
     """
-    composite = mathutils.Matrix.Identity(4)
-    for transform in transforms:
-        
-        if len(transform) != 4 and len(transform[0] != 4):
-            return None
-
-        composite = transform @ composite
-
+    
+    composite = np.linalg.multi_dot(transforms[::-1])
     if clear:
         transforms.clear()
-
     return composite
 
 def export_moved_info(path, transforms, objID, clear=True):
-    """Takes a single matrix or a list of matrices and stores and returns overall matrix with respect to habitat-sim convention (rotation around x ccw with 90 degrees)"""
+    """Takes a single matrix or a list of matrices, stores and returns overall matrix with respect to habitat-sim convention"""
+    
     global rotx90minus, rotx90plus, SEG_COLORS
 
     transform = transforms
@@ -434,16 +435,11 @@ def export_moved_info(path, transforms, objID, clear=True):
     
     transform = rotx90minus @ transform @ rotx90plus
 
-    flattened = []
-    for row in transform[:3]:
-        flattened += list(row)
-
     info = {
         "color": SEG_COLORS[objID],
         "name": objID,
-        "transformation": flattened
+        "transformation": transform[:3].ravel().tolist() # Save as 3x4 matrix
     }
-
     with open(path, "w+") as file:
         json.dump(info, file, indent=4)
 
