@@ -320,38 +320,39 @@ class MainWindow(QWidget):
             save_data(self.output_path, self.sample_count, *data)
             log = "Saving data at t:{}".format(self.timestep)
             self.info_panel.appendPlainText(log)
-            self.action_hist.append("save\n")
+            self.action_hist.append("save")
             self.sample_count += 1
-            
+        
+        # TODO: Speed adjustment should be saved as well.
         # Increase translational & angular speed
-        elif key == Qt.Key_Plus:
-            actions = self.agent.agent_config.action_space
-            for k,v in actions.items():
-                if "move" in k:
-                    actions[k].actuation.amount += 0.05
-                else:
-                    actions[k].actuation.amount += 5
-            translational = actions["move_up"].actuation.amount
-            angular = actions["look_up"].actuation.amount
-            log = "Speed increased. Curently translational speed: {:.2f} angular speed: {:.2f}\n".format(translational, angular)
-            self.info_panel.appendPlainText(log)
+        # elif key == Qt.Key_Plus:
+        #     actions = self.agent.agent_config.action_space
+        #     for k,v in actions.items():
+        #         if "move" in k:
+        #             actions[k].actuation.amount += 0.05
+        #         else:
+        #             actions[k].actuation.amount += 5
+        #     translational = actions["move_up"].actuation.amount
+        #     angular = actions["look_up"].actuation.amount
+        #     log = "Speed increased. Curently translational speed: {:.2f} angular speed: {:.2f}\n".format(translational, angular)
+        #     self.info_panel.appendPlainText(log)
 
         # Decrease translational & angular speed
-        elif key == Qt.Key_Minus:
-            actions = self.agent.agent_config.action_space
-            for k,v in actions.items():
-                if "move" in k:
-                    tmp = actions[k].actuation.amount - 0.05
-                    if tmp >= 0:
-                        actions[k].actuation.amount = tmp
-                else:
-                    tmp = actions[k].actuation.amount - 5
-                    if tmp >= 0:
-                        actions[k].actuation.amount = tmp
-            translational = actions["move_up"].actuation.amount
-            angular = actions["look_up"].actuation.amount
-            log = "Speed decreased. Curently translational speed: {:.2f} angular speed: {:.2f}\n".format(translational, angular)
-            self.info_panel.appendPlainText(log)
+        # elif key == Qt.Key_Minus:
+        #     actions = self.agent.agent_config.action_space
+        #     for k,v in actions.items():
+        #         if "move" in k:
+        #             tmp = actions[k].actuation.amount - 0.05
+        #             if tmp >= 0:
+        #                 actions[k].actuation.amount = tmp
+        #         else:
+        #             tmp = actions[k].actuation.amount - 5
+        #             if tmp >= 0:
+        #                 actions[k].actuation.amount = tmp
+        #     translational = actions["move_up"].actuation.amount
+        #     angular = actions["look_up"].actuation.amount
+        #     log = "Speed decreased. Curently translational speed: {:.2f} angular speed: {:.2f}\n".format(translational, angular)
+        #     self.info_panel.appendPlainText(log)
         
         # Take an action
         elif key in self.action_map:
@@ -446,7 +447,7 @@ def main(argv):
     with open(os.path.join(output_path, "actions.txt"), "w+") as file:
         file.write(str(start_pos) + "\n")
         file.write(str(start_rot) + "\n")
-        content = "\n".join(action_hist)
+        content = "\n".join(action_hist) + "\n"
         file.write(content)
 
 # Execute only if run as a script

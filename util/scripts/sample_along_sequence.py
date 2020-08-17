@@ -50,40 +50,40 @@ def make_cfg(settings):
     agent_cfg.sensor_specifications = sensor_specs
     agent_cfg.action_space = {
         "move_up": habitat_sim.agent.ActionSpec(
-            "move_up", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_up", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_down": habitat_sim.agent.ActionSpec(
-            "move_down", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_down", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_forward": habitat_sim.agent.ActionSpec(
-            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_right": habitat_sim.agent.ActionSpec(
-            "move_right", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_right", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_backward": habitat_sim.agent.ActionSpec(
-            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_backward", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "move_left": habitat_sim.agent.ActionSpec(
-            "move_left", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_left", habitat_sim.agent.ActuationSpec(amount=0.15)
         ),
         "turn_right": habitat_sim.agent.ActionSpec(
-            "turn_right", habitat_sim.agent.ActuationSpec(amount=10.0)
+            "turn_right", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "turn_left": habitat_sim.agent.ActionSpec(
-            "turn_left", habitat_sim.agent.ActuationSpec(amount=10.0)
+            "turn_left", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_up": habitat_sim.agent.ActionSpec(
-            "look_up", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_up", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_right": habitat_sim.agent.ActionSpec(
-            "look_right", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_right", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_down": habitat_sim.agent.ActionSpec(
-            "look_down", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_down", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
         "look_left": habitat_sim.agent.ActionSpec(
-            "look_left", habitat_sim.agent.ActuationSpec(amount=10)
+            "look_left", habitat_sim.agent.ActuationSpec(amount=5.0)
         ),
     }
     
@@ -198,7 +198,7 @@ def init_sim(sim_settings, start_pos, start_rot):
 
 def main(argv):
     if len(argv) < 4:
-        print("Required 4 args: \n(1) scene_ply\n(2) traj_path\n(3) output_path (4) visualize\n")
+        print("Required 4 args: \n(1) scene_ply\n(2) traj_path\n(3) output_path\n(4) visualize\n")
         exit(-1)
 
     # Remove habitat logs
@@ -208,7 +208,7 @@ def main(argv):
     scene_ply = argv[0]
     traj_path = argv[1]
     output_path = argv[2]
-    DISPLAY = bool(argv[3])
+    DISPLAY = bool(eval(argv[3]))
     print(output_path)
 
     start_pos = None

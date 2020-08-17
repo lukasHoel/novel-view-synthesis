@@ -347,6 +347,16 @@ def selection_center():
     selected_coords = np.array([v.co for v in selected_verts])
     return selected_coords.mean(axis=0)
 
+def selection_center_wrt_habitat(blender_pos=None):
+    global rotx90minus, rotx90plus
+    
+    if not blender_pos:
+      blender_pos = selection_center()
+    
+    converted = rotx90minus @ np.array([*blender_pos, 1])
+    
+    return converted[0:3]
+
 def translate_selection(t, store=True):
     """Translate with t (given as (x,y,z)) using vertex coordinates of selected faces, return equivalent 4x4 translation matrix"""
     
@@ -435,11 +445,11 @@ def export_moved_info(path, transforms, objID, clear=True):
     
     transform = rotx90minus @ transform @ rotx90plus
 
-    info = {
+    info = [{
         "color": SEG_COLORS[objID],
         "name": objID,
         "transformation": transform[:3].ravel().tolist() # Save as 3x4 matrix
-    }
+    }]
     with open(path, "w+") as file:
         json.dump(info, file, indent=4)
 
