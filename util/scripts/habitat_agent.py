@@ -318,10 +318,10 @@ class MainWindow(QWidget):
             sensor_state = self.agent.get_state().sensor_states["color_sensor"]
             data = collect_all_data(observations, sensor_state)
             save_data(self.output_path, self.sample_count, *data)
-            log = "Saving data at t:{}".format(self.timestep)
-            self.info_panel.appendPlainText(log)
             self.action_hist.append("save")
             self.sample_count += 1
+            log = "Saving data at t:{}, total number of samples:{}".format(self.timestep, self.sample_count)
+            self.info_panel.appendPlainText(log)
         
         # TODO: Speed adjustment should be saved as well.
         # Increase translational & angular speed
