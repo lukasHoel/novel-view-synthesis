@@ -2,6 +2,7 @@ import numpy as np
 import torch.utils.data as data
 from PIL import Image
 from torchvision.transforms import Compose, Normalize, Resize, ToTensor
+import torch
 
 
 class RealEstate10K(data.Dataset):
@@ -343,8 +344,8 @@ class RealEstate10KConsecutive(data.Dataset):
             P[3, 3] = 1
 
             Pinv = np.linalg.inv(P)
-            RT.append(P)
-            RTinv.append(Pinv)
+            RT.append(torch.from_numpy(P))
+            RTinv.append(torch.from_numpy(Pinv))
 
         cam = {
                'RT1': RT[0],
@@ -352,8 +353,8 @@ class RealEstate10KConsecutive(data.Dataset):
                'RT2': RT[1],
                'RT2inv': RTinv[1],
                'OrigP': origP,
-               'K': self.K,
-               'Kinv': self.invK,
+               'K': torch.from_numpy(self.K),
+               'Kinv': torch.from_numpy(self.invK),
             }
 
         output = {'image': rgbs[1]}
