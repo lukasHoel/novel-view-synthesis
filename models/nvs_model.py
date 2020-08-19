@@ -4,7 +4,7 @@ import torch.nn as nn
 from models.enc_dec.feature_network import FeatureNet
 from models.enc_dec.depth_network import Unet
 from projection.z_buffer_manipulator import PtsManipulator
-from models.enc_dec.refinement_network import ParallelRefinementNetwork, SequentialRefinementNetwork
+from models.enc_dec.refinement_network import ParallelRefinementNetwork, SequentialRefinementNetwork, RefineNet
 
 class NovelViewSynthesisModel(nn.Module):
     def __init__(self,
@@ -147,7 +147,11 @@ class NovelViewSynthesisModel(nn.Module):
                                                          noisy_bn=self.dec_noisy_bn,
                                                          spectral_norm=self.dec_spectral_norm)
         else:
-            raise ValueError(f"Unknown refinement_mode:{self.refinement_mode}")
+            self.projector = RefineNet(res_block_dims=self.dec_dims,
+                                       res_block_types=self.dec_blk_types,
+                                       activate_out=self.dec_activation_func,
+                                       noisy_bn=self.dec_noisy_bn,
+                                       spectral_norm=self.dec_spectral_norm)
 
 
         # TODO WHERE IS THIS NEEDED?
@@ -219,7 +223,7 @@ class NovelViewSynthesisModel(nn.Module):
         '''
 
         # DECODE IMAGE
-        transformed_img, transformed_seg = self.projector(transformed_img_features)
+        transformed_img = self.projector(transformed_img_features)
         #transformed_img = transformed_img_features # use this when refinement network should not be used
         #print(transformed_img.shape)
         #print(torch.min(transformed_img))
@@ -238,9 +242,9 @@ class NovelViewSynthesisModel(nn.Module):
             "OutputImg": gt_img,
             "OutputSeg": gt_seg,
             "PredImg": transformed_img,
-            "PredSeg": transformed_seg,
+            #"PredSeg": transformed_seg,
             "PredDepth": regressed_pts,
-            "InputDepth": depth_img
+            #"InputDepth": depth_img
         }
 
     # TODO WHERE IS THIS USED? At inference time for multiple image generations?

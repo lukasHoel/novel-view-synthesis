@@ -38,14 +38,14 @@ def default_batch_loader(batch):
     output_RT = batch['cam']['RT2']
     output_RT_inv = batch['cam']['RT2inv']
     gt_img = batch['output']['image'] if batch['output'] is not None else None
-    gt_seg = batch['output']['seg'] if batch['output'] is not None else None
-    depth_img = batch['depth']
-    dynamics = batch['dynamics']
+    #gt_seg = batch['output']['seg'] if batch['output'] is not None else None
+    #depth_img = batch['depth']
+    #dynamics = batch['dynamics']
 
     # this could also be None if such data is not present in the dataset
-    gt_img_moved_for_evaluation_only = batch['output']['gt_moved_rgb_for_evaluation_only'] if batch['output'] is not None else None
+    #gt_img_moved_for_evaluation_only = batch['output']['gt_moved_rgb_for_evaluation_only'] if batch['output'] is not None else None
 
-    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, gt_seg, depth_img, dynamics, gt_img_moved_for_evaluation_only
+    return input_img, K, K_inv, input_RT, input_RT_inv, output_RT, output_RT_inv, gt_img, #gt_seg, depth_img, dynamics, gt_img_moved_for_evaluation_only
 
 # NOTE: Unused, might be used for debugging
 def check_norm(img, verbose=False):
