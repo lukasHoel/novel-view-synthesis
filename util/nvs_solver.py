@@ -289,7 +289,7 @@ class NVS_Solver(object):
         dynamics = batch[-1]
         acc_dir = None
 
-        if dynamics is not None:
+        if dynamics:
             loss_dir = self.loss_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'], dynamics["input_mask"], dynamics["output_mask"])
             if self.acc_func is not None:
                 acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'], dynamics["output_mask"], dynamics["input_mask"])
@@ -298,7 +298,7 @@ class NVS_Solver(object):
             if self.acc_func is not None:
                 acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
 
-        if dynamics is not None and gt_img_moved_for_evaluation_only is not None:
+        if dynamics and gt_img_moved_for_evaluation_only is not None:
             # evaluate with gt_rgb_img_moved
             gt_img_moved_acc_dir = self.acc_func(output['PredImg'], gt_img_moved_for_evaluation_only, output['PredSeg'], output['OutputSeg'], dynamics["output_mask"], dynamics["input_mask"])
 

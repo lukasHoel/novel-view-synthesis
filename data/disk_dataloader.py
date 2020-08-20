@@ -377,7 +377,7 @@ class DiskDataset(Dataset, ABC):
             else:
                 dynamics = self.load_dynamics(seg_image, None)
         else:
-            dynamics = None
+            dynamics = {}
 
         # CONSTRUCT SAMPLE
         sample = {

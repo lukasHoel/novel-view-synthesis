@@ -173,7 +173,7 @@ class NovelViewSynthesisModel(nn.Module):
                 gt_img=None,
                 gt_seg=None,
                 depth_img=None,
-                dynamics=None):
+                dynamics={}):
         # ENCODE IMAGE
         if self.use_rgb_features:
             img_features = input_img

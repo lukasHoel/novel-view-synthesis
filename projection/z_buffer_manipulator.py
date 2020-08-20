@@ -102,7 +102,7 @@ class PtsManipulator(nn.Module):
         wrld_X = RT_cam1.bmm(cam1_X)
 
         # Add dynamic changes if available
-        if dynamics is not None:
+        if dynamics:
             bs = wrld_X.shape[0] # batch size
             transformation = dynamics["transformation"] # retrieve dynamic transformation from data
             mask = dynamics["input_mask"].view(bs, -1) # retrieve mask from data and flatten because wrld_X is flattened, too.
