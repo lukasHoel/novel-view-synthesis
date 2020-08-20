@@ -100,7 +100,10 @@ class DiskDataset(Dataset, ABC):
 
     def load_image(self, idx, load_seg_image=False):
         if load_seg_image:
-            return Image.open(os.path.join(self.path, self.img_seg[idx]))
+            seg_image = Image.open(os.path.join(self.path, self.img_seg[idx]))
+            if seg_image.mode == "RGBA":
+                seg_image = seg_image.convert("RGB")
+            return seg_image
         else:
             return Image.open(os.path.join(self.path, self.img_rgb[idx]))
 
@@ -318,6 +321,12 @@ class DiskDataset(Dataset, ABC):
         # LOAD INPUT IMAGE
         image = self.load_image(idx, self.input_as_segmentation)
 
+        # LOAD INPUT SEG IMAGE
+        if self.img_seg is not None:
+            seg_image = self.load_image(idx, True)
+        else:
+            seg_image = None
+
         # LOAD INPUT DEPTH
         depth = self.load_depth(idx)
 
@@ -363,7 +372,6 @@ class DiskDataset(Dataset, ABC):
 
         # LOAD DYNAMICS
         if self.dynamics is not None:
-            seg_image = self.load_image(idx, True)
             if self.sampleOutput:
                 dynamics = self.load_dynamics(seg_image, output_image_seg)
             else:
@@ -374,6 +382,7 @@ class DiskDataset(Dataset, ABC):
         # CONSTRUCT SAMPLE
         sample = {
             'image': image,
+            'seg': seg_image,
             'depth': depth,
             'cam': cam,
             'output': output,
@@ -383,6 +392,8 @@ class DiskDataset(Dataset, ABC):
         # APPLY TRANSFORM OBJECT
         if self.transform:
             sample['image'] = self.transform(sample['image'])
+            if sample['seg'] is not None:
+                sample['seg'] = self.transform(sample['seg'])
             if sample['depth'] is not None:
                 sample['depth'] = self.transform_depth(sample['depth'])
 

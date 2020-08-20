@@ -110,7 +110,7 @@ if __name__ == '__main__':
     if len(sys.argv) != 3 and len(sys.argv) != 4:
         raise ValueError('Usage: ' + sys.argv[0] + ' <path_to_icl_with_camera_angles> <path_to_povray_icl_folder> (<path_to_moved.txt>)')
 
-    remaining_seqs = ["seq0007", "seq0008", "seq0009", "seq0010", "seq0011", "seq0012", "seq0013", "seq0014", "seq0015", "seq0016", "seq0017", "seq0018", "seq0019"]
+    remaining_seqs = ["seq0003"]
 
     for seq in remaining_seqs:
         print(sys.argv)

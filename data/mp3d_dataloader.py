@@ -72,6 +72,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
 
         # only take the _0 to be chosen and let _1 always be the output pair. This way we do not use data twice!
         img = list(filter(lambda x: x.endswith('_0.png'), files))
+        seg = list(filter(lambda x: x.endswith('_0.seg.png'), files))
         depth = list(filter(lambda x: x.endswith('_0.depth'), files))
         has_depth = len(depth) > 0
         depth_binary = list(filter(lambda x: x.endswith('_0.depth.npy'), files))
@@ -81,10 +82,17 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
         # append the _1 paths at the end of each list and set size to len/2, s.t. the dataloader only accesses the _0 items
         out_img = list(filter(lambda x: x.endswith('_1.png'), files))
         if len(out_img) != len(img):
-            raise ValueError("number of images with _0 ({}) and _1 ({}) not identical".format(len(img), len(out_img)))
+            raise ValueError("number of rgb images with _0 ({}) and _1 ({}) not identical".format(len(img), len(out_img)))
         else:
-            print("number of images with _0 ({}) and _1 ({}) identical".format(len(img), len(out_img)))
+            print("number of rgb images with _0 ({}) and _1 ({}) identical".format(len(img), len(out_img)))
             img.extend(out_img)
+
+        out_seg = list(filter(lambda x: x.endswith('_1.seg.png'), files))
+        if len(out_seg) != len(seg):
+            raise ValueError("number of seg images with _0 ({}) and _1 ({}) not identical".format(len(seg), len(out_seg)))
+        else:
+            print("number of seg images with _0 ({}) and _1 ({}) identical".format(len(seg), len(out_seg)))
+            seg.extend(out_seg)
 
         out_depth = list(filter(lambda x: x.endswith('_1.depth'), files))
         if len(out_depth) != len(depth):
@@ -107,7 +115,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
             print("number of camera .txt with _0 ({}) and _1 ({}) identical".format(len(cam), len(out_cam)))
             cam.extend(out_cam)
 
-        return img, None, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None, None
+        return img, seg if len(seg) > 0 else None, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None, None
 
     def modify_depth(self, depth):
         return depth # nothing to do here
@@ -128,13 +136,67 @@ def getEulerAngles(R):
     return rx, ry, rz
 
 
+# Checks if a matrix is a valid rotation matrix.
+def isRotationMatrix(R):
+    Rt = np.transpose(R)
+    shouldBeIdentity = np.dot(Rt, R)
+    I = np.identity(3, dtype=R.dtype)
+    n = np.linalg.norm(I - shouldBeIdentity)
+    return n < 1e-6
+
+
+# Calculates rotation matrix to euler angles
+# The result is the same as MATLAB except the order
+# of the euler angles ( x and z are swapped ).
+def rotationMatrixToEulerAngles(R):
+    assert (isRotationMatrix(R))
+
+    sy = np.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+
+    singular = sy < 1e-6
+
+    if not singular:
+        x = np.arctan2(R[2, 1], R[2, 2])
+        y = np.arctan2(-R[2, 0], sy)
+        z = np.arctan2(R[1, 0], R[0, 0])
+    else:
+        x = np.arctan2(-R[1, 2], R[1, 1])
+        y = np.arctan2(-R[2, 0], sy)
+        z = 0
+
+    return np.array([x, y, z])
+
+
+# Calculates Rotation Matrix given euler angles.
+def eulerAnglesToRotationMatrix(theta):
+    R_x = np.array([[1, 0, 0],
+                    [0, np.cos(theta[0]), -np.sin(theta[0])],
+                    [0, np.sin(theta[0]), np.cos(theta[0])]
+                    ])
+
+    R_y = np.array([[np.cos(theta[1]), 0, np.sin(theta[1])],
+                    [0, 1, 0],
+                    [-np.sin(theta[1]), 0, np.cos(theta[1])]
+                    ])
+
+    R_z = np.array([[np.cos(theta[2]), -np.sin(theta[2]), 0],
+                    [np.sin(theta[2]), np.cos(theta[2]), 0],
+                    [0, 0, 1]
+                    ])
+
+    R = np.dot(R_z, np.dot(R_y, R_x))
+
+    return R
+
+
+
 def test():
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Resize((512, 512)),
         torchvision.transforms.ToTensor(),
     ])
 
-    dataset = MP3D_Habitat_Offline_Dataset("/home/lukas/datasets/Matterport3D/data/v1/tasks/mp3d_habitat/rendered",
+    dataset = MP3D_Habitat_Offline_Dataset("/home/lukas/datasets/Matterport3D/data/v1/tasks/mp3d_habitat/rendered_with_seg",
                              in_size=256,
                              sampleOutput=True,
                              inverse_depth=False,
@@ -144,23 +206,20 @@ def test():
     print("Length of dataset: {}".format(len(dataset)))
 
     # Show first item in the dataset
-    import numpy as np
-    i = np.random.randint(len(dataset))
+    i = 0
     item = dataset.__getitem__(i)
 
-    #print(item["depth"].numpy().flags)
-
-
     print(item["image"].shape)
-    print(item["depth"].shape)
 
-    print("RT1:\n{}". format(item['cam']['RT1']))
-    print("RT1 euler angles in radians: {}".format(getEulerAngles(item['cam']['RT1'])))
+    print("RT1:\n{}".format(item['cam']['RT1']))
+    print("R1 euler angles in radians: {}".format(
+        rotationMatrixToEulerAngles(item['cam']['RT1'].cpu().numpy()[0:3, 0:3])))
     print("RT2:\n{}".format(item['cam']['RT2']))
-    print("RT2 euler angles in radians: {}".format(getEulerAngles(item['cam']['RT2'])))
+    print("R2 euler angles in radians: {}".format(
+        rotationMatrixToEulerAngles(item['cam']['RT2'].cpu().numpy()[0:3, 0:3])))
     print("K:\n{}".format(item['cam']['K']))
 
-    print("RT1inv:\n{}". format(item['cam']['RT1inv']))
+    print("RT1inv:\n{}".format(item['cam']['RT1inv']))
     print("RT2inv:\n{}".format(item['cam']['RT2inv']))
     print("Kinv:\n{}".format(item['cam']['Kinv']))
 
@@ -171,19 +230,39 @@ def test():
     import matplotlib.pyplot as plt
     fig = plt.figure(figsize=item['image'].shape[1:])
     fig.suptitle("Sample " + str(i), fontsize=16)
+
     img = np.moveaxis(item['image'].numpy(), 0, -1)
-    depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
+    seg = np.moveaxis(item['seg'].numpy(), 0, -1)
     out_img = np.moveaxis(item['output']['image'].numpy(), 0, -1)
+    out_seg = np.moveaxis(item['output']['seg'].numpy(), 0, -1)
     out_idx = item['output']['idx']
-    fig.add_subplot(1, 3, 1)
+
+    depth = np.moveaxis(item['depth'].numpy(), 0, -1).squeeze()
+    depth_out = np.moveaxis(item['output']['depth'].numpy(), 0, -1).squeeze()
+
+    fig.add_subplot(1, 6, 1)
     plt.title("Input Image")
     plt.imshow(img)
-    fig.add_subplot(1, 3, 2)
+
+    fig.add_subplot(1, 6, 2)
+    plt.title("Input Seg")
+    plt.imshow(seg)
+
+    fig.add_subplot(1, 6, 3)
     plt.title("Input Depth Map")
-    plt.imshow(depth, cmap="gray")
-    fig.add_subplot(1, 3, 3)
-    plt.title("Output Image")
+    plt.imshow(depth)
+
+    fig.add_subplot(1, 6, 4)
+    plt.title("Output Image " + str(out_idx))
     plt.imshow(out_img)
+
+    fig.add_subplot(1, 6, 5)
+    plt.title("Output Seg " + str(out_idx))
+    plt.imshow(out_seg)
+
+    fig.add_subplot(1, 6, 6)
+    plt.title("Output Depth Map")
+    plt.imshow(depth_out)
 
     plt.show()
 
