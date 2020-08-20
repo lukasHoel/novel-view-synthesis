@@ -128,7 +128,7 @@ class ICLNUIMDataset(DiskDataset):
         has_binary_depth = len(depth_binary) > 0
         cam = sorted([f for f in dir_content if f.endswith('.txt')])
 
-        return img, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, len(img), None, None
+        return img, img_seg, depth, has_depth, depth_binary, has_binary_depth, cam, len(img), None, img
 
 
 def getEulerAngles(R):

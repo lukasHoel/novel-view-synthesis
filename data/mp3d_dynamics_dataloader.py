@@ -64,7 +64,8 @@ class MP3D_Habitat_Offline_Dynamic_Dataset(MP3D_Habitat_Offline_Dataset):
 
         if len(moved_img_gt_rgb) != len(img_seg):
             print("No moved gt rgb images for evaluation found in: {}".format(self.path))
-            moved_img_gt_rgb = None
+            moved_img_gt_rgb = img_rgb.copy()
+            moved_img_gt_rgb.extend(img_rgb.copy())
 
         # load moved depth and depth.npy
         moved_depth = sorted([os.path.join("moved", f) for f in os.listdir(os.path.join(self.path, "moved")) if f.endswith('.depth')])

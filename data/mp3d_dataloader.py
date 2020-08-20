@@ -115,7 +115,7 @@ class MP3D_Habitat_Offline_Dataset(DiskDataset):
             print("number of camera .txt with _0 ({}) and _1 ({}) identical".format(len(cam), len(out_cam)))
             cam.extend(out_cam)
 
-        return img, seg if len(seg) > 0 else None, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None, None
+        return img, seg if len(seg) > 0 else None, depth, has_depth, depth_binary, has_binary_depth, cam, len(img)//2, None, img
 
     def modify_depth(self, depth):
         return depth # nothing to do here
