@@ -173,7 +173,9 @@ class ParallelRefinementNetwork(nn.Module):
         # - nn.Tanh to force output to be in range [-1,1]
         self.activate_out = activate_out
 
-    def forward(self, x):
+    def forward(self, x, input_seg):
+
+        # ignores input_seg for now because it is not supported, but still gets it as argument for API consistency.
 
         if self.shared_layers == 0:
             img = self.rgb_blocks(x)
@@ -207,7 +209,8 @@ class SequentialRefinementNetwork(nn.Module):
                  seg_block_types=[],
                  activate_out=nn.Sigmoid(),
                  noisy_bn=True,
-                 spectral_norm=True):
+                 spectral_norm=True,
+                 concat_input_seg=False):
         '''
         :param rgb_block_dims: channels of refinement network for rgb
         :param rgb_block_types: refinement block types for rgb
@@ -216,28 +219,34 @@ class SequentialRefinementNetwork(nn.Module):
         :param activate_out: activation function for output
         :param noisy_bn: whether to inject noise while performing batch norm
         :param spectral_norm: whether to use spectral norm
+        :param concat_input_seg: whether the segmentation image of the input (unchanged in any way) should be concatenated along with the rgb prediction. This is a guide for the network which colors it should use (can be different for different scenes).
         '''
 
         super().__init__()
 
-        if(rgb_block_dims[-1] != seg_block_dims[0]):
-            raise ValueError(f"Last block dim of rgb and first block dim of seg must be equal, but they are: {rgb_block_dims[-1]} (rgb) != {seg_block_dims[0]} (seg)")
+        if rgb_block_dims[-1] != seg_block_dims[0]:
+            raise ValueError(f"Last block dim of rgb and first block dim of seg must be equal, but they are: {rgb_block_dims[-1]} (rgb) != {seg_block_dims[0]} (seg). If you want to use concat_input_seg you still need to specify matching dims, the concatenation will be done anyways internally.")
 
         self.rgb_blocks = self.create_from_dims_and_type(rgb_block_dims, rgb_block_types, noisy_bn, spectral_norm)
-        self.seg_blocks = self.create_from_dims_and_type(seg_block_dims, seg_block_types, noisy_bn, spectral_norm)
+        self.seg_blocks = self.create_from_dims_and_type(seg_block_dims, seg_block_types, noisy_bn, spectral_norm, concat_input_seg)
+
+        self.concat_input_seg = concat_input_seg
 
         # Final activation can be:
         # - nn.Sigmoid to force output to be in range [0,1]
         # - nn.Tanh to force output to be in range [-1,1]
         self.activate_out = activate_out
 
-    def create_from_dims_and_type(self, dims, type, noisy_bn, spectral_norm):
+    def create_from_dims_and_type(self, dims, type, noisy_bn, spectral_norm, concat_input_seg=False):
         blocks = []
 
         for i in range(len(dims) - 1):
+            in_ch = dims[i]
+            if i == 0 and concat_input_seg:
+                in_ch += 3
             blocks.append(
                 ResidualBlock(
-                    in_ch=dims[i],
+                    in_ch=in_ch,
                     out_ch=dims[i + 1],
                     block_type=type[i],
                     noisy_bn=noisy_bn,
@@ -247,13 +256,17 @@ class SequentialRefinementNetwork(nn.Module):
 
         return nn.Sequential(*blocks)
 
-    def forward(self, x):
+    def forward(self, rgb_features, input_seg):
 
-        img = self.rgb_blocks(x)
-        seg = self.seg_blocks(img)
+        rgb_img = self.rgb_blocks(rgb_features)
+        if self.concat_input_seg:
+            seg_input = torch.cat((rgb_img, input_seg), 1) # tensors are of shape BS x C x H x W --> concat at channel dimension
+            seg = self.seg_blocks(seg_input)
+        else:
+            seg = self.seg_blocks(rgb_img)
 
         if self.activate_out:
-            img = self.activate_out(img)
+            rgb_img = self.activate_out(rgb_img)
             seg = self.activate_out(seg)
 
-        return img, seg
+        return rgb_img, seg

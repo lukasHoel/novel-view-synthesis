@@ -28,6 +28,7 @@ class NovelViewSynthesisModel(nn.Module):
                  seg_blk_types=["id"],
                  shared_layers=0,
                  refinement_mode="sequential",
+                 concat_input_seg=False,
                  dec_activation_func=nn.Sigmoid(),
                  dec_noisy_bn=True,
                  dec_spectral_norm=True,
@@ -68,6 +69,7 @@ class NovelViewSynthesisModel(nn.Module):
         self.seg_blk_types = seg_blk_types
         self.shared_layers = shared_layers
         self.refinement_mode = refinement_mode
+        self.concat_input_seg = concat_input_seg
         self.dec_activation_func = dec_activation_func
         self.dec_noisy_bn = dec_noisy_bn
         self.dec_spectral_norm = dec_spectral_norm
@@ -138,6 +140,7 @@ class NovelViewSynthesisModel(nn.Module):
                                                        activate_out=self.dec_activation_func,
                                                        noisy_bn=self.dec_noisy_bn,
                                                        spectral_norm=self.dec_spectral_norm)
+
         elif self.refinement_mode == "sequential":
             self.projector = SequentialRefinementNetwork(rgb_block_dims=self.dec_dims,
                                                          rgb_block_types=self.dec_blk_types,
@@ -145,7 +148,11 @@ class NovelViewSynthesisModel(nn.Module):
                                                          seg_block_types=self.seg_blk_types,
                                                          activate_out=self.dec_activation_func,
                                                          noisy_bn=self.dec_noisy_bn,
-                                                         spectral_norm=self.dec_spectral_norm)
+                                                         spectral_norm=self.dec_spectral_norm,
+                                                         concat_input_seg=self.concat_input_seg)
+
+        elif self.refinement_mode == "parallel" and self.concat_input_seg:
+            raise ValueError(f"Parallel refinement and concatenating the input seg is currently not supported. Use the Sequential refinement for that.")
         else:
             raise ValueError(f"Unknown refinement_mode:{self.refinement_mode}")
 
@@ -171,6 +178,7 @@ class NovelViewSynthesisModel(nn.Module):
                 output_RT,
                 output_RT_inv,
                 gt_img=None,
+                input_seg=None,
                 gt_seg=None,
                 depth_img=None,
                 dynamics={}):
@@ -219,11 +227,7 @@ class NovelViewSynthesisModel(nn.Module):
         '''
 
         # DECODE IMAGE
-        transformed_img, transformed_seg = self.projector(transformed_img_features)
-        #transformed_img = transformed_img_features # use this when refinement network should not be used
-        #print(transformed_img.shape)
-        #print(torch.min(transformed_img))
-        #print(torch.max(transformed_img))
+        transformed_img, transformed_seg = self.projector(transformed_img_features, input_seg)
 
         # NORMALIZE IMAGES
         # Output of projector (refinement_network) is tanh --> [-1,1] so transform it to [0,1] here
