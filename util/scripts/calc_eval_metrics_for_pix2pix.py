@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from PIL import Image
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Resize, Compose
 import numpy as np
 import json
 import uuid
@@ -132,7 +132,10 @@ def calc_metrics(pred_images, gt_images):
     # objects for calculations
     psnr = PSNR()
     ssim = SSIM()
-    to_tensor = ToTensor()
+    to_tensor = Compose([
+        Resize(192),
+        ToTensor()
+    ])
 
     # storage of all scores
     psnr_scores = []
