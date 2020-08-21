@@ -176,9 +176,9 @@ def add_metadata(metrics, input_pred, input_gt, number_images):
 
 def save_metrics(metrics, output):
     id = str(uuid.uuid4())
-    file = os.path.join(output, "metrics_" + id)
+    file = os.path.join(output, "metrics_" + id + ".json")
     with open(file, "w") as f:
-        json.dump(metrics, f)
+        json.dump(str(metrics), f)
         print(f"Saved metrics under {file}")
 
 def main(input_pred, input_gt, output):
