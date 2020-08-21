@@ -127,7 +127,7 @@ class GAN_Wrapper_Solver(object):
             self.writer.add_scalar(prefix + 'Batch/Accuracy/' + acc,
                                    acc_dir[acc].detach().data.cpu().numpy(),
                                    idx)
-        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["ssim"].detach().cpu().numpy() # could also use acc_dir["psnr"]
+        return loss_dir['Total Loss'].detach().cpu().numpy(), acc_dir["rgb_ssim"].detach().cpu().numpy() # could also use acc_dir["psnr"]
 
 
     def log_epoch_loss_and_acc(self, train_loss, val_loss, train_acc, val_acc, idx):
