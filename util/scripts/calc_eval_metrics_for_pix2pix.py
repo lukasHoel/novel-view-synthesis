@@ -183,6 +183,7 @@ def main(input_pred, input_gt, output):
     gt_images = find_images(input_gt, ".png") # in the train_B folder all images are the gt images and thus ".png" is the only requirement
 
     # must have equal length for calculation to make sense
+    gt_images = gt_images[:len(pred_images)]
     assert (len(pred_images) == len(gt_images))
 
     # calculate metrics
