@@ -282,11 +282,11 @@ class NVS_Solver(object):
         batch = to_cuda(self.batch_loader(batch))
 
         # this gets not even passed to our model, only for evaluation purposes
-        gt_img_moved_for_evaluation_only = batch[-1]
-        batch = batch[:-1]
+        #gt_img_moved_for_evaluation_only = batch[-1]
+        #batch = batch[:-1]
 
         output = model(*batch)
-        dynamics = batch[-1]
+        dynamics = None
         acc_dir = None
 
         if dynamics is not None:
@@ -294,9 +294,9 @@ class NVS_Solver(object):
             if self.acc_func is not None:
                 acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'], dynamics["output_mask"], dynamics["input_mask"])
         else:
-            loss_dir = self.loss_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
+            loss_dir = self.loss_func(output['PredImg'], output['OutputImg'])
             if self.acc_func is not None:
-                acc_dir = self.acc_func(output['PredImg'], output['OutputImg'], output['PredSeg'], output['OutputSeg'])
+                acc_dir = self.acc_func(output['PredImg'], output['OutputImg'])
 
         if dynamics is not None and gt_img_moved_for_evaluation_only is not None:
             # evaluate with gt_rgb_img_moved
@@ -349,7 +349,7 @@ class NVS_Solver(object):
 
         self.writer.flush()
 
-    def visualize_output(self, output, take_slice=None, tag="image", step=0, depth=True):
+    def visualize_output(self, output, take_slice=None, tag="image", step=0, depth=False):
         """
         Generic method for visualizing a single image or a whole batch
         Parameters
@@ -360,22 +360,15 @@ class NVS_Solver(object):
         step: used for stamping epoch or iteration
         """
         # TODO: depth_batch is ignored for the moment, however, if needed, it can also be integrated later on
-        input_batch, target_batch, target_batch_seg, pred_batch, pred_batch_seg, depth_batch, input_depth = output["InputImg"].detach().cpu(),\
-                                                                          output["OutputImg"].detach().cpu(), \
-                                                                          output["OutputSeg"].detach().cpu(), \
-                                                                          output["PredImg"].detach().cpu(), \
-                                                                          output["PredSeg"].detach().cpu(), \
-                                                                          output["PredDepth"].detach().cpu(),\
-                                                                          output['InputDepth'].detach().cpu()
+        input_batch, target_batch, pred_batch = output["InputImg"].detach().cpu(),\
+                                                output["OutputImg"].detach().cpu(), \
+                                                output["PredImg"].detach().cpu()
         with torch.no_grad():
             # In case of a single image add one dimension to the beginning to create single image batch
             if len(pred_batch.shape) == 3:
                 input_batch = input_batch.unsqueeze(0)
                 target_batch = target_batch.unsqueeze(0)
-                target_batch_seg = target_batch_seg.unsqueeze(0)
                 pred_batch = pred_batch.unsqueeze(0)
-                pred_batch_seg = pred_batch_seg.unsqueeze(0)
-                depth_batch = depth_batch.unsqueeze(0)
 
             if len(pred_batch.shape) != 4:
                 print("Only 3D or 4D tensors can be visualized")
@@ -385,10 +378,7 @@ class NVS_Solver(object):
             if take_slice and (type(take_slice) in (list, tuple)) and (len(take_slice) == 2):
                 input_batch = input_batch[take_slice[0], take_slice[1]]
                 target_batch = target_batch[take_slice[0], take_slice[1]]
-                target_batch_seg = target_batch_seg[take_slice[0], take_slice[1]]
                 pred_batch = pred_batch[take_slice[0], take_slice[1]]
-                pred_batch_seg = pred_batch_seg[take_slice[0], take_slice[1]]
-                depth_batch = depth_batch[take_slice[0], take_slice[1]]
 
             # Store vstack of images: [input_batch0, target_batch0, pred_batch0 ...].T on img_lst
             img_lst = torch.Tensor()
@@ -402,9 +392,7 @@ class NVS_Solver(object):
                 img_lst = torch.cat((img_lst,
                     input_batch[i].unsqueeze(0),
                     target_batch[i].unsqueeze(0),
-                    pred_batch[i].unsqueeze(0),
-                    target_batch_seg[i].unsqueeze(0),
-                    pred_batch_seg[i].unsqueeze(0)), dim=0)
+                    pred_batch[i].unsqueeze(0)), dim=0)
 
             if depth:
                 depth_lst = torch.Tensor()

@@ -353,7 +353,7 @@ class QualityMetrics(nn.Module):
 
     PSNR, SSIM will be calculated for both rgb and seg predictions.
     """
-    def __init__(self, metrics=["PSNR", "SSIM"], ignore_rgb_at_scene_editing_masks=True):
+    def __init__(self, metrics=["PSNR", "SSIM"], ignore_rgb_at_scene_editing_masks=False):
         super().__init__()
 
         print("Metric names:", *metrics)
@@ -376,7 +376,7 @@ class QualityMetrics(nn.Module):
         if torch.cuda.is_available():
             return metric.cuda()
 
-    def forward(self, pred_img, gt_img, pred_seg, gt_seg, gt_output_mask=None, input_mask=None):
+    def forward(self, pred_img, gt_img, pred_seg=None, gt_seg=None, gt_output_mask=None, input_mask=None):
         """
         For each metric function provided, evaluate the function with prediction and target.
         Output is returned in "results" dict.
@@ -407,13 +407,14 @@ class QualityMetrics(nn.Module):
                 out_rgb["rgb_"+str(rgb_key)] = out_rgb.pop(rgb_key)
 
                 # calculate for seg and add prefix "seg" to result
+                """
                 out_seg = func(pred_seg, gt_seg)
                 seg_key = next(iter(out_seg))
                 out_seg["seg_" + str(seg_key)] = out_seg.pop(seg_key)
-
+                """
                 # add to overall output dict
                 results.update(out_rgb)
-                results.update(out_seg)
+                #results.update(out_seg)
             else:
                 raise ValueError("Invalid metric in QualityMetrics: " + func)
 

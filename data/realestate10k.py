@@ -1,9 +1,25 @@
 import numpy as np
+from math import sqrt
 import torch.utils.data as data
 from PIL import Image
 from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 import torch
 
+
+def get_deltas(mat1, mat2):
+    mat1 = np.vstack((mat1, np.array([0, 0, 0, 1])))
+    mat2 = np.vstack((mat2, np.array([0, 0, 0, 1])))
+
+    dMat = np.matmul(np.linalg.inv(mat1), mat2)
+    dtrans = dMat[0:3, 3] ** 2
+    dtrans = sqrt(dtrans.sum())
+
+    origVec = np.array([[0], [0], [1]])
+    rotVec = np.matmul(dMat[0:3, 0:3], origVec)
+    arccos = (rotVec * origVec).sum() / sqrt((rotVec ** 2).sum())
+    dAngle = np.arccos(arccos) * 180.0 / np.pi
+
+    return dAngle, dtrans
 
 class RealEstate10K(data.Dataset):
     """ Dataset for loading the RealEstate10K. In this case, images are randomly 
@@ -25,7 +41,7 @@ class RealEstate10K(data.Dataset):
         if dataset == "train":
             self.imageset = self.imageset[0 : int(0.8 * self.imageset.shape[0])]
         else:
-            self.imageset = self.imageset[int(0.8 * self.imageset.shape[0]) :]
+            self.imageset = self.imageset
 
         self.rng = np.random.RandomState(seed)
         self.base_file = path
@@ -36,7 +52,7 @@ class RealEstate10K(data.Dataset):
             [
                 Resize((W, H)),
                 ToTensor(),
-                Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                #Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ]
         )
 
@@ -63,7 +79,7 @@ class RealEstate10K(data.Dataset):
         self.TRANS_THRESH = 0.15
 
     def __len__(self):
-        return 2 ** 31
+        return len(self.imageset)
 
     def __getitem_simple__(self, index):
         index = self.rng.randint(self.imageset.shape[0])
@@ -164,7 +180,8 @@ class RealEstate10K(data.Dataset):
         ]
 
         rgbs = []
-        cameras = []
+        RT = []
+        RTinv = []
         for i in range(0, self.num_views):
             if i == 0:
                 t_index = image_index
@@ -206,17 +223,22 @@ class RealEstate10K(data.Dataset):
 
             Pinv = np.linalg.inv(P)
 
-            cameras += [
-                {
-                    "P": P,
-                    "Pinv": Pinv,
-                    "OrigP": origP,
-                    "K": self.K,
-                    "Kinv": self.invK,
-                }
-            ]
+            RT.append(torch.from_numpy(P))
+            RTinv.append(torch.from_numpy(Pinv))
 
-        return {"images": rgbs, "cameras": cameras}
+        cam = {
+               'RT1': RT[0],
+               'RT1inv': RTinv[0],
+               'RT2': RT[1],
+               'RT2inv': RTinv[1],
+               'OrigP': origP,
+               'K': torch.from_numpy(self.K),
+               'Kinv': torch.from_numpy(self.invK),
+            }
+
+        output = {'image': rgbs[1]}
+
+        return {"image": rgbs[0], "cam": cam, "output": output}
 
     def totrain(self, epoch):
         self.imageset = np.loadtxt(

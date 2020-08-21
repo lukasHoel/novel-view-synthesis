@@ -27,7 +27,8 @@ class PtsManipulator(nn.Module):
 
     matterport_mode = 'mp3d'
     icl_nuim_mode = 'icl'
-    modes = [matterport_mode, icl_nuim_mode]
+    realestate_mode = 're10k'
+    modes = [matterport_mode, icl_nuim_mode, realestate_mode]
 
     def __init__(self,
                  mode='mp3d',
@@ -74,7 +75,7 @@ class PtsManipulator(nn.Module):
                 (xs, ys, torch.ones(xs.size()), torch.ones(xs.size())), 1
             ).view(1, 4, -1)
 
-        elif mode == PtsManipulator.matterport_mode:
+        elif mode == PtsManipulator.matterport_mode or mode == PtsManipulator.realestate_mode:
             xs = torch.linspace(0, W - 1, W) / float(W - 1) * 2 - 1
             ys = torch.linspace(0, W - 1, W) / float(W - 1) * 2 - 1
 
@@ -133,7 +134,7 @@ class PtsManipulator(nn.Module):
             # here we set (x,y,z) to -10 where we have invalid zs that cause nans
             sampler[mask.repeat(1, 3, 1)] = 10
 
-        elif self.mode == PtsManipulator.matterport_mode:
+        elif self.mode == PtsManipulator.matterport_mode or self.mode == PtsManipulator.realestate_mode:
             sampler = torch.cat((xy_proj[:, 0:2, :] / -zs, xy_proj[:, 2:3, :]), 1)
             sampler[mask.repeat(1, 3, 1)] = -10
             # Flip the ys

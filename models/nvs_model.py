@@ -240,7 +240,7 @@ class NovelViewSynthesisModel(nn.Module):
         return {
             "InputImg": input_img,
             "OutputImg": gt_img,
-            "OutputSeg": gt_seg,
+            #"OutputSeg": gt_seg,
             "PredImg": transformed_img,
             #"PredSeg": transformed_seg,
             "PredDepth": regressed_pts,
