@@ -131,7 +131,7 @@ class NovelViewSynthesisModel(nn.Module):
             self.dec_dims[0] = 3
             self.dec_dims[-1] = 3
 
-        if self.refinement_mode == "parallel":
+        if self.refinement_mode == "parallel" and not self.concat_input_seg:
             self.projector = ParallelRefinementNetwork(ref_block_dims=self.dec_dims,
                                                        ref_block_types=self.dec_blk_types,
                                                        seg_block_dims=self.seg_dims,
