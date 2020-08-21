@@ -216,4 +216,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(input_pred=args.input_pred,
          input_gt=args.input_gt,
-         output=args.output)
+         output=args.output if args.output is not None else args.input_pred)
