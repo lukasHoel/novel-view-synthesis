@@ -208,8 +208,8 @@ class SequentialRefinementNetwork(nn.Module):
                  seg_block_dims=[],
                  seg_block_types=[],
                  activate_out=nn.Sigmoid(),
-                 noisy_bn=True,
-                 spectral_norm=True,
+                 noisy_bn=[True,False],
+                 spectral_norm=[True,False],
                  concat_input_seg=False):
         '''
         :param rgb_block_dims: channels of refinement network for rgb
@@ -227,8 +227,8 @@ class SequentialRefinementNetwork(nn.Module):
         if rgb_block_dims[-1] != seg_block_dims[0]:
             raise ValueError(f"Last block dim of rgb and first block dim of seg must be equal, but they are: {rgb_block_dims[-1]} (rgb) != {seg_block_dims[0]} (seg). If you want to use concat_input_seg you still need to specify matching dims, the concatenation will be done anyways internally.")
 
-        self.rgb_blocks = self.create_from_dims_and_type(rgb_block_dims, rgb_block_types, noisy_bn, spectral_norm)
-        self.seg_blocks = self.create_from_dims_and_type(seg_block_dims, seg_block_types, noisy_bn, spectral_norm, concat_input_seg)
+        self.rgb_blocks = self.create_from_dims_and_type(rgb_block_dims, rgb_block_types, noisy_bn[0], spectral_norm[0])
+        self.seg_blocks = self.create_from_dims_and_type(seg_block_dims, seg_block_types, noisy_bn[1], spectral_norm[1], concat_input_seg)
 
         self.concat_input_seg = concat_input_seg
 
