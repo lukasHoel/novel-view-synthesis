@@ -43,11 +43,14 @@ class SceneEditingAndSynthesisLoss(nn.Module):
     def __init__(self,
                  synthesis_losses=['1.0_l1', '10.0_content'],
                  scene_editing_weight=1.0,
-                 scene_editing_lpregion_params=[1.0, 1.0, 3.0]):
+                 scene_editing_lpregion_params=[1.0, 1.0, 3.0],
+                 scene_editing_ignore_input_mask_region=False):
         super().__init__()
 
         self.synthesis_loss = SynthesisLoss(synthesis_losses, True)
-        self.scene_editing_loss = SceneEditingLoss(scene_editing_weight, scene_editing_lpregion_params)
+        self.scene_editing_loss = SceneEditingLoss(weight=scene_editing_weight,
+                                                   lpregion_params=scene_editing_lpregion_params,
+                                                   ignore_input_mask_region=scene_editing_ignore_input_mask_region)
 
     def forward(self, pred_img, gt_img, pred_seg, gt_seg, input_mask, gt_output_mask):
         synthesis_results = self.synthesis_loss(pred_img, gt_img, input_mask, gt_output_mask)
@@ -64,13 +67,14 @@ class SceneEditingLoss(nn.Module):
     Calculates the LPRegionLoss over the segmentation prediction at the given movement masks.
     """
 
-    def __init__(self, weight=1.0, lpregion_params=[1.0, 0.0, 2.0]):
+    def __init__(self, weight=1.0, lpregion_params=[1.0, 0.0, 2.0], ignore_input_mask_region=False):
         super().__init__()
 
         self.weight = weight
         self.region_lp = LPRegionLoss(*lpregion_params)
+        self.ignore_input_mask_region = ignore_input_mask_region
 
-        print("Loss {} with weight {} and params {}".format(type(self.region_lp).__name__, self.weight, lpregion_params))
+        print("Loss {} with weight {} and params {} and ignore_input_mask_region {}".format(type(self.region_lp).__name__, self.weight, lpregion_params, ignore_input_mask_region))
 
         if torch.cuda.is_available():
             self.region_lp = self.region_lp.cuda()
@@ -126,7 +130,11 @@ class SceneEditingLoss(nn.Module):
         # pass to lp region loss: higher_region is everything that was moved (input, gt, pred), lower_region is the rest (unmoved pixels)
         #merged_output_mask = (pred_output_mask > 0) | gt_output_mask | input_mask
         merged_output_mask = gt_output_mask | input_mask
-        region_lp = self.region_lp(pred_seg, gt_seg, ~merged_output_mask, merged_output_mask)
+        if self.ignore_input_mask_region:
+            no_weight_mask = input_mask & ~gt_output_mask
+            region_lp = self.region_lp(pred_seg, gt_seg, ~merged_output_mask, gt_output_mask, no_weight_mask)
+        else:
+            region_lp = self.region_lp(pred_seg, gt_seg, ~merged_output_mask, merged_output_mask)
 
         # create dict containing both results
         region_lp["Total Loss"] = region_lp["Total Loss"] * self.weight

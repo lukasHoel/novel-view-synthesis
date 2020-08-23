@@ -17,12 +17,19 @@ class LPRegionLoss(nn.Module):
         self.lower_weight = lower_weight
         self.higher_weight = higher_weight
 
-    def forward(self, pred_img, gt_img, mask_lower_region, mask_higher_region):
+    def forward(self, pred_img, gt_img, mask_lower_region, mask_higher_region, mask_no_weight_region=None):
 
         # check if lower and higher region overlap. If so: truncate the lower region
         overlap = (mask_lower_region == mask_higher_region)
         mask_lower_region = mask_lower_region.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
         mask_lower_region[overlap] = False
+
+        # check if higher and no_weight_region overlap. If so: truncate the higher region (and thus, transitively the lower region as well)
+        if mask_no_weight_region is not None:
+            overlap = (mask_no_weight_region == mask_higher_region)
+            mask_higher_region = mask_higher_region.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
+            mask_higher_region[overlap] = False
+
 
         # TODO how to vectorize this?
         bs = pred_img.shape[0]
@@ -39,7 +46,13 @@ class LPRegionLoss(nn.Module):
             pred_img_weighted[i, :, mask_higher] *= self.higher_weight
             gt_img_weighted[i, :, mask_higher] *= self.higher_weight
 
-            '''
+            # set to zero for the no_weight region
+            if mask_no_weight_region is not None:
+                mask_no_weight = mask_no_weight_region[i].squeeze()
+                pred_img_weighted[i, :, mask_no_weight] *= 0
+                gt_img_weighted[i, :, mask_no_weight] *= 0
+
+
             import matplotlib.pyplot as plt
             print("pred img weighted")
             plt.imshow(pred_img_weighted[i].permute((1,2,0)).cpu().detach().numpy())
@@ -56,7 +69,12 @@ class LPRegionLoss(nn.Module):
             print("mask higher")
             plt.imshow(mask_higher.cpu().detach().numpy())
             plt.show()
-            '''
+
+            if mask_no_weight_region is not None:
+                print("mask no weight")
+                plt.imshow(mask_no_weight.cpu().detach().numpy())
+                plt.show()
+
 
         # calculate lp loss
         loss = torch.mean(torch.abs(pred_img_weighted - gt_img_weighted)**self.p)
