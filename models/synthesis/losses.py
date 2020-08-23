@@ -52,7 +52,7 @@ class LPRegionLoss(nn.Module):
                 pred_img_weighted[i, :, mask_no_weight] *= 0
                 gt_img_weighted[i, :, mask_no_weight] *= 0
 
-
+            """
             import matplotlib.pyplot as plt
             print("pred img weighted")
             plt.imshow(pred_img_weighted[i].permute((1,2,0)).cpu().detach().numpy())
@@ -74,6 +74,7 @@ class LPRegionLoss(nn.Module):
                 print("mask no weight")
                 plt.imshow(mask_no_weight.cpu().detach().numpy())
                 plt.show()
+            """
 
 
         # calculate lp loss
