@@ -184,7 +184,7 @@ def save_data(path, index, rgb, sem, dep, Pinv):
 
 def query_seg_color(objID):
     # Identify segmentation color for the modified object
-    color = d3_40_colors_rgb[OBJID]
+    color = d3_40_colors_rgb[objID]
     print("RGB (Unnormalized):", color)
     print("RGB (Normalized):", color/255)
     color = np.broadcast_to(color, (256, 256, 3))
@@ -444,7 +444,11 @@ def main(argv):
 
     # Simulation ends:
     # Save actions taken during the simulation
-    with open(os.path.join(output_path, "actions.txt"), "w+") as file:
+    output_path = output_path.rstrip("/")
+    parent = os.path.split(output_path)[0]
+    parent = os.path.split(parent)[0]
+    actions_path = os.path.join(parent, "actions.txt")
+    with open(actions_path, "w+") as file:
         file.write(str(start_pos) + "\n")
         file.write(str(start_rot) + "\n")
         content = "\n".join(action_hist) + "\n"
