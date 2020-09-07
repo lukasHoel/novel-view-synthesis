@@ -34,12 +34,14 @@ class RealEstate10K(data.Dataset):
         # Now go through the dataset
 
         self.imageset = np.loadtxt(
-            path + "/frames/%s/video_loc.txt" % "test",
+            path + "/frames/%s/video_loc.txt" % "train",
             dtype=np.str,
         )
 
         if dataset == "train":
             self.imageset = self.imageset[0 : int(0.8 * self.imageset.shape[0])]
+        elif dataset == "val":
+            self.imageset = self.imageset[int(0.8 * self.imageset.shape[0]) :]
         else:
             self.imageset = self.imageset
 
