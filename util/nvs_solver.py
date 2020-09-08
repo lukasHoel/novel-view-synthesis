@@ -403,9 +403,10 @@ class NVS_Solver(object):
                 img_lst = torch.cat((img_lst,
                     input_batch[i].unsqueeze(0),
                     target_batch[i].unsqueeze(0),
-                    pred_batch[i].unsqueeze(0),
-                    target_batch_seg[i].unsqueeze(0),
-                    pred_batch_seg[i].unsqueeze(0)), dim=0)
+                    pred_batch[i].unsqueeze(0)), dim=0)
+                    # TODO: find a way to display Segmentations here
+                    #target_batch_seg[i].unsqueeze(0),
+                    #pred_batch_seg[i].unsqueeze(0)), dim=0)
 
             if depth:
                 depth_lst = torch.Tensor()

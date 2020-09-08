@@ -1,5 +1,6 @@
 from models.synthesis.losses import *
 from models.synthesis.metrics import *
+import torch.nn as nn
 
 
 class SynthesisLossRGBandSeg(nn.Module):
@@ -48,13 +49,13 @@ class SceneEditingAndSynthesisLoss(nn.Module):
         super().__init__()
 
         self.synthesis_loss = SynthesisLoss(synthesis_losses, True)
-        self.scene_editing_loss = SceneEditingLoss(weight=scene_editing_weight,
-                                                   lpregion_params=scene_editing_lpregion_params,
-                                                   ignore_input_mask_region=scene_editing_ignore_input_mask_region)
+        self.scene_editing_loss = CrossEntropyWrapper()#SceneEditingLoss(weight=scene_editing_weight,
+                                                   #lpregion_params=scene_editing_lpregion_params,
+                                                   #ignore_input_mask_region=scene_editing_ignore_input_mask_region)
 
     def forward(self, pred_img, gt_img, pred_seg, gt_seg, input_mask, gt_output_mask):
         synthesis_results = self.synthesis_loss(pred_img, gt_img, input_mask, gt_output_mask)
-        scene_editing_results = self.scene_editing_loss(pred_seg, gt_seg, input_mask, gt_output_mask)
+        scene_editing_results = self.scene_editing_loss(pred_seg, gt_seg)#, input_mask, gt_output_mask)
 
         results = {**synthesis_results, **scene_editing_results}
         results["Total Loss"] = synthesis_results["Total Loss"] + scene_editing_results["Total Loss"]
@@ -415,13 +416,15 @@ class QualityMetrics(nn.Module):
                 out_rgb["rgb_"+str(rgb_key)] = out_rgb.pop(rgb_key)
 
                 # calculate for seg and add prefix "seg" to result
+                '''
+                TODO: find a good metric for Segmentation acc
                 out_seg = func(pred_seg, gt_seg)
                 seg_key = next(iter(out_seg))
                 out_seg["seg_" + str(seg_key)] = out_seg.pop(seg_key)
-
+                '''
                 # add to overall output dict
                 results.update(out_rgb)
-                results.update(out_seg)
+                #results.update(out_seg)
             else:
                 raise ValueError("Invalid metric in QualityMetrics: " + func)
 

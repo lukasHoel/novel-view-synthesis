@@ -4,9 +4,11 @@ from PIL import Image
 from util.camera_transformations import *
 import re
 import torchvision
+import torch
 
 from abc import ABC, abstractmethod
 
+test_seg = torch.randint(0, 10, (256, 256))
 
 class ToNumpy(object):
     def __call__(self, sample):
@@ -364,7 +366,7 @@ class DiskDataset(Dataset, ABC):
 
             output = {
                 'image': output_image_rgb,
-                'seg': output_image_seg,
+                'seg': test_seg,
                 'depth': output_depth,
                 'idx': output_idx,
                 'gt_moved_rgb_for_evaluation_only': moved_output_gt_rgb_image_for_evaluation_only
@@ -382,7 +384,7 @@ class DiskDataset(Dataset, ABC):
         # CONSTRUCT SAMPLE
         sample = {
             'image': image,
-            'seg': seg_image,
+            'seg': test_seg,
             'depth': depth,
             'cam': cam,
             'output': output,
@@ -392,15 +394,15 @@ class DiskDataset(Dataset, ABC):
         # APPLY TRANSFORM OBJECT
         if self.transform:
             sample['image'] = self.transform(sample['image'])
-            if sample['seg'] is not None:
-                sample['seg'] = self.transform(sample['seg'])
+            #if sample['seg'] is not None:
+            #    sample['seg'] = self.transform(sample['seg'])
             if sample['depth'] is not None:
                 sample['depth'] = self.transform_depth(sample['depth'])
 
             if self.sampleOutput:
                 sample['output']['image'] = self.transform(sample['output']['image'])
-                if sample['output']['seg'] is not None:
-                    sample['output']['seg'] = self.transform(sample['output']['seg'])
+                #if sample['output']['seg'] is not None:
+                #    sample['output']['seg'] = self.transform(sample['output']['seg'])
                 if sample['output']['depth'] is not None:
                     sample['output']['depth'] = self.transform_depth(sample['output']['depth'])
                 if sample['output']['gt_moved_rgb_for_evaluation_only'] is not None:

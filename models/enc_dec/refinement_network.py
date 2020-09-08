@@ -1,5 +1,5 @@
 from models.enc_dec.residual_block import *
-
+import torch
 
 class RefineNet(nn.Module):
     '''
@@ -243,7 +243,7 @@ class SequentialRefinementNetwork(nn.Module):
         for i in range(len(dims) - 1):
             in_ch = dims[i]
             if i == 0 and concat_input_seg:
-                in_ch += 3
+                in_ch += 1
             blocks.append(
                 ResidualBlock(
                     in_ch=in_ch,
@@ -260,6 +260,7 @@ class SequentialRefinementNetwork(nn.Module):
 
         rgb_img = self.rgb_blocks(rgb_features)
         if self.concat_input_seg:
+            input_seg = input_seg.unsqueeze(1)
             seg_input = torch.cat((rgb_img, input_seg), 1) # tensors are of shape BS x C x H x W --> concat at channel dimension
             seg = self.seg_blocks(seg_input)
         else:
@@ -267,6 +268,6 @@ class SequentialRefinementNetwork(nn.Module):
 
         if self.activate_out:
             rgb_img = self.activate_out(rgb_img)
-            seg = self.activate_out(seg)
+            #seg = self.activate_out(seg)
 
         return rgb_img, seg

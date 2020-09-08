@@ -93,6 +93,20 @@ class L1LossWrapper(nn.Module):
         err = F.l1_loss(pred_img, gt_img)
         return {"L1": err, "Total Loss": err}
 
+class CrossEntropyWrapper(nn.Module):
+    """Wrapper of the CrossEntropyLoss so that the format matches what is expected"""
+    def forward(self, pred_img, target):
+        """
+        :param pred_img: Segmentation outputted from the generator; 
+            Loss expects [bs, nb_classes, height, width] as input,
+            where nb_classes is the number of segmentation class scores
+        :param gt_img: target segmentation; 
+            Loss expects [bs, height, width] as input, 
+            where each batch contains class scores from [0, nb_classes-1]
+        """
+        err = F.cross_entropy(pred_img, target)
+        return {"CrossEntropy": err, "Total Loss": err}
+
 
 class VGG19(nn.Module):
     """Pretrained VGG19 architecture to be utilized in PerceptualLoss"""
