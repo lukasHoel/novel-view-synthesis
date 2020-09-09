@@ -28,7 +28,7 @@ class NovelViewSynthesisModel(nn.Module):
                  seg_blk_types=["id"],
                  shared_layers=0,
                  refinement_mode="sequential",
-                 concat_input_seg=False,
+                 concat_input_seg={'semantic':False, 'instance':False},
                  dec_activation_func=nn.Sigmoid(),
                  dec_noisy_bn=True,
                  dec_spectral_norm=True,

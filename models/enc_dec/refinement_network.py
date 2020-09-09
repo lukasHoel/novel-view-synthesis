@@ -210,7 +210,7 @@ class SequentialRefinementNetwork(nn.Module):
                  activate_out=nn.Sigmoid(),
                  noisy_bn=[True,False],
                  spectral_norm=[True,False],
-                 concat_input_seg=False):
+                 concat_input_seg={'instance':False, 'semantic': True}):
         '''
         :param rgb_block_dims: channels of refinement network for rgb
         :param rgb_block_types: refinement block types for rgb
@@ -256,16 +256,19 @@ class SequentialRefinementNetwork(nn.Module):
 
         return nn.Sequential(*blocks)
 
-    def forward(self, rgb_features, input_seg):
+    def forward(self, rgb_features, sem_seg, inst_seg=None):
 
         rgb_img = self.rgb_blocks(rgb_features)
-        if self.concat_input_seg:
-            input_seg = input_seg.unsqueeze(1)
-            seg_input = torch.cat((rgb_img, input_seg), 1) # tensors are of shape BS x C x H x W --> concat at channel dimension
+        if self.concat_input_seg['instance']:
+            inst_seg = inst_seg.unsqueeze(1)
+            seg_input = torch.cat((rgb_img, inst_seg), 1) # tensors are of shape BS x C x H x W --> concat at channel dimension
+            seg = self.seg_blocks(seg_input)
+        elif self.concat_input_seg['semantic']:
+            sem_seg = sem_seg.unsqueeze(1)
+            seg_input = torch.cat((rgb_img, sem_seg), 1) # tensors are of shape BS x C x H x W --> concat at channel dimension
             seg = self.seg_blocks(seg_input)
         else:
             seg = self.seg_blocks(rgb_img)
-
         if self.activate_out:
             rgb_img = self.activate_out(rgb_img)
             #seg = self.activate_out(seg)
