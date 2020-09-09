@@ -12,7 +12,7 @@ using json = nlohmann::json;
 class Segmentation_Provider {
 
     public:
-        Segmentation_Provider(string const &semseg_path, string const &vseg_path);
+        Segmentation_Provider(string const &semseg_path, string const &vseg_path, string const &fseg_path, Mesh &mesh);
         ~Segmentation_Provider();
         void change_colors(Mesh &mesh);
         int getObjectId(int vertexIndex);
@@ -24,9 +24,18 @@ class Segmentation_Provider {
         int n_vertices;
         json vseg;
         json semseg;
+        json fseg;
+        
         std::vector<int> vertex_to_segment;
+        
+        std::vector<int> face_to_segment;
+        std::map<int, int> vertex_to_face;
+        
         std::map<int, int> segment_to_object_id;
         std::map<int, glm::vec3> object_id_to_color;
+        
+        std::map<int, std::string> segment_to_class;
+        std::map<std::string, glm::vec3> class_to_color;
 
         void random_rgb(float rgb[]){
             int i;

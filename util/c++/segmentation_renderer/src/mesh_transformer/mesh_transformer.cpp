@@ -27,7 +27,7 @@ void Mesh_Transformer::splitMeshAtObject(int objectId) {
         }
     }
 
-    m_mesh.indices = newIndices;
+    m_mesh.indices = newIndices; // TODO because we completely replace the original indices, we can only ever do one split per mesh load!!
     m_mesh.updateData();
 }
 

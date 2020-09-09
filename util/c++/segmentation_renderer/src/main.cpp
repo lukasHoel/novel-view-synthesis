@@ -1,14 +1,14 @@
 #include <iostream>
 
-#include "icl_renderer.h"
-#include "icl_parser.h"
-#include "icl_mesh_transformer.h"
-#include "icl_segmentation_provider.h"
+//#include "icl_renderer.h"
+//#include "icl_parser.h"
+//#include "icl_mesh_transformer.h"
+//#include "icl_segmentation_provider.h"
 
-//#include "mp_renderer.h"
-//#include "mp_parser.h"
-//#include "segmentation_provider.h"
-//#include "mesh_transformer.h"
+#include "mp_renderer.h"
+#include "mp_parser.h"
+#include "segmentation_provider.h"
+#include "mesh_transformer.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -29,6 +29,7 @@
 
 int main(int argc, char** argv){
 
+    /*
     std::string seq = "seq0019";
 
     // ICL_Parser ip("/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop", 0);
@@ -70,8 +71,9 @@ int main(int argc, char** argv){
     //Model icl_model("/home/lukas/Desktop/datasets/ICL-NUIM/model_for_rendering/living_room_obj_mtl/living-room.obj");
     icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/custom/" + seq + "/moved");
     // icl_renderer.renderTrajectory(ip, "/home/lukas/Desktop/datasets/ICL-NUIM/prerendered_data/living_room_traj2_loop");
+    */
     
-    /*
+    
     if(argc != 3){
         std::cout << "Usage: " << argv[0] << " path/to/Matterport3D/data/v1/scans <scanID>" << std::endl;
         return EXIT_FAILURE;
@@ -94,8 +96,8 @@ int main(int argc, char** argv){
 
         std::cout << "Renderer initialized" << std::endl;
 
-        Segmentation_Provider sp(regionPath + "semseg.json", regionPath + "vsegs.json");
         for(auto& mesh : renderer.m_model->meshes){
+            Segmentation_Provider sp(regionPath + "semseg.json", regionPath + "vsegs.json", regionPath + "fsegs.json", mesh);
             sp.change_colors(mesh);
         }
 
@@ -105,6 +107,7 @@ int main(int argc, char** argv){
         renderer.renderImages(outdir + "/original");
 
         for(auto& mesh : renderer.m_model->meshes){
+            Segmentation_Provider sp(regionPath + "semseg.json", regionPath + "vsegs.json", regionPath + "fsegs.json", mesh);
             Mesh_Transformer transform(mesh, sp);
             transform.splitMeshAtObject(1);
             glm::mat4 t = { 1, 0, 0, 0,
@@ -127,7 +130,7 @@ int main(int argc, char** argv){
         std::cerr << "Caught exception: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }
-    */
+    
     
 
     return EXIT_SUCCESS;
