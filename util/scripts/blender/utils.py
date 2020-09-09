@@ -87,6 +87,15 @@ rotx90minus = np.array([[1.0,  0.0, 0.0, 0.0],
                         [0.0,  0.0, 0.0, 1.0]])
 rotx90plus = np.linalg.inv(rotx90minus)
 
+def reset_state():
+  global obj, obj_data, mesh, VERTEX_COUNT,FACE_COUNT, vertex_to_rgb,face_to_objID,objID_to_face, seg_to_objID, transforms
+  obj = obj_data = mesh = VERTEX_COUNT = FACE_COUNT = None
+  vertex_to_rgb.clear()
+  face_to_objID.clear()
+  objID_to_face.clear()
+  seg_to_objID.clear()
+  transforms.clear()
+
 def blender_init():
     """
     Sets global variables that are required for scene manipulation. 
@@ -108,7 +117,6 @@ def blender_init():
 
     VERTEX_COUNT = len(mesh.verts)
     FACE_COUNT = len(mesh.faces)
-    transforms.clear()
 
 def importer(path):
     global vertex_to_rgb, face_to_objID, objID_to_face
@@ -334,10 +342,13 @@ def get_objID_of_selection():
     consensus = Counter(objIDs).most_common(1)[0][0]
     return consensus
                 
-def select_faces_of_obj(objID, sel_extend=False):
+def select_faces_of_obj(objID=None, sel_extend=False):
     """Get all faces bound to a specific object"""
     
     global objID_to_face, mesh, obj_data
+
+    if objID == None:
+      objID = get_objID_of_selection()
 
     # Deselect all previous if extended selection is not desired
     if not sel_extend:
@@ -365,7 +376,7 @@ def cut_object(objID=None):
     
     global objID_to_face, face_to_objID, mesh, obj_data
 
-    if not objID:
+    if objID == None:
       objID = get_objID_of_selection()
 
     idxs = objID_to_face[objID]
@@ -424,6 +435,11 @@ def get_translation_matrix(t, square=True):
     t = np.array([*t, 1]) if (square and len(t) == 3) else t
     T[:,3] = t
     return T
+
+def unravel(t):
+    t = t.reshape(3,4)
+    t = np.vstack((t, [0, 0, 0, 1]))
+    return t
 
 def get_RT_matrix(angles, t, square=True, in_degrees=True):
     """Specify rotation angles (as (rx, ry, rz)) and translation parameters (as (x,y,z)), return equivalent 3x4 or 4x4 transformation matrix"""
@@ -564,7 +580,7 @@ def export_moved_info(path, transforms, objID=None, clear=True):
     
     global SEG_COLORS
 
-    if not objID:
+    if objID == None:
       objID = get_objID_of_selection()
 
     transform = transforms
@@ -574,11 +590,10 @@ def export_moved_info(path, transforms, objID=None, clear=True):
     transform = convert_to_habitat(transform)
 
     info = [{
-        "color": SEG_COLORS[objID],
+        "color": SEG_COLORS[objID % 40],
         "name": objID,
         "transformation": transform[:3].ravel().tolist() # Save as 3x4 matrix
     }]
     with open(path, "w+") as file:
         json.dump(info, file, indent=4)
-
     return transform
