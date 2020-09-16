@@ -157,6 +157,7 @@ class GAN_Wrapper_Solver(object):
 
     def train(self,
               model,
+              dataset,
               train_loader,
               val_loader,
               num_epochs=10,
@@ -180,7 +181,9 @@ class GAN_Wrapper_Solver(object):
                 anything else, e.g. None: do not use tqdm
         :param steps: how many generator/discriminator steps to take before changing to discriminator/generator
         """
-
+           
+        train_set = dataset
+        
         optimizer_G = self.nvs_solver.optim(
             filter(lambda p: p.requires_grad, model.parameters()),
             **self.nvs_solver.optim_args
@@ -255,6 +258,7 @@ class GAN_Wrapper_Solver(object):
                                                                               loss=train_loss))
                     self.nvs_solver.visualize_output(all_output_images[-1], tag="train", step=epoch*iter_per_epoch + i, depth=self.log_depth)
 
+            train_set.totrain(epoch=epoch+1)        
             self.scheduler_D.step()
             scheduler_G.step()
 

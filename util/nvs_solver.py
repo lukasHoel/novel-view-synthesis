@@ -409,7 +409,7 @@ class NVS_Solver(object):
                 depth_grid = make_grid(depth_lst, nrow=2)
                 self.writer.add_image(tag+'/depth', depth_grid, global_step=step)
 
-            img_grid = make_grid(img_lst, nrow=5) # Per row, pick five images from the stack
+            img_grid = make_grid(img_lst, nrow=3) # Per row, pick five images from the stack
             # TODO: this idea can be extended, we can even parametrize this
             # TODO: if needed, determine range of values and use make_grid flags: normalize, range
 
