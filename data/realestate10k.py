@@ -246,7 +246,7 @@ class RealEstate10K(data.Dataset):
         self.imageset = np.loadtxt(
             self.base_file + "/frames/%s/video_loc.txt" % "train", dtype=np.str
         )
-        self.imageset = self.imageset[0 : int(0.01 * self.imageset.shape[0])]
+        self.imageset = self.imageset[0 : int(0.8 * self.imageset.shape[0])]
         self.rng = np.random.RandomState(epoch)
 
     def toval(self, epoch):
