@@ -93,9 +93,15 @@ class L1LossWrapper(nn.Module):
         err = F.l1_loss(pred_img, gt_img)
         return {"L1": err, "Total Loss": err}
 
-class CrossEntropyWrapper(nn.Module):
-    """Wrapper of the CrossEntropyLoss so that the format matches what is expected"""
-    def forward(self, pred_img, target):
+class CrossEntropyRegionLoss(nn.Module):
+    """Cross Entropy Loss with weighted loss for moved regions"""
+
+    def __init__(self, lower_weight = 1.0, higher_weight = 5.0):
+        super().__init__()
+        self.lower_weight = lower_weight
+        self.higher_weight = higher_weight
+
+    def forward(self, pred_img, target, mask_lower_region, mask_higher_region, mask_no_weight_region=None):
         """
         :param pred_img: Segmentation outputted from the generator; 
             Loss expects [bs, nb_classes, height, width] as input,
@@ -104,7 +110,37 @@ class CrossEntropyWrapper(nn.Module):
             Loss expects [bs, height, width] as input, 
             where each batch contains class scores from [0, nb_classes-1]
         """
-        err = F.cross_entropy(pred_img, target)
+
+      # check if lower and higher region overlap. If so: truncate the lower region
+        overlap = (mask_lower_region == mask_higher_region)
+        mask_lower_region = mask_lower_region.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
+        mask_lower_region[overlap] = False
+
+        # check if higher and no_weight_region overlap. If so: truncate the higher region (and thus, transitively the lower region as well)
+        if mask_no_weight_region is not None:
+            overlap = (mask_no_weight_region == mask_higher_region)
+            mask_higher_region = mask_higher_region.clone() # fix for backpropagation: inplace operations like in next line(s) do not work with pytorch autograd
+            mask_higher_region[overlap] = False
+
+        # calculate unreduced cross_entropy loss for full batch
+        err = F.cross_entropy(pred_img, target, reduction='none')
+
+        # apply lower_weight to the lower_important region
+        mask_lower = mask_lower_region.squeeze()
+        err[mask_lower] *= self.lower_weight
+
+        # apply higher_weight to the higher_important region
+        mask_higher = mask_higher_region.squeeze()
+        err[mask_higher] *= self.higher_weight
+        
+        # set to zero for the no_weight region
+        if mask_no_weight_region is not None:
+            mask_no_weight = mask_no_weight_region.squeeze()
+            err[mask_no_weight] *= 0
+
+        # reduce loss to scalar to allow for autograd backpropagation
+        err = torch.mean(err)
+
         return {"CrossEntropy": err, "Total Loss": err}
 
 
