@@ -154,11 +154,19 @@ class RealEstate10K(data.Dataset):
             self.base_file
             + "/frames/%s/%s.txt" % (self.dataset, self.imageset[index])
         )
-
+        
+        while(frames.shape == (19,)):
+            index += 1
+            frames = np.loadtxt(
+                self.base_file
+                + "/frames/%s/%s.txt" % (self.dataset, self.imageset[index])
+        )
+            
         image_index = self.rng.choice(frames.shape[0], size=(1,))[0]
-
+        
+        #print("frames.shape:"+str(frames.shape))
         # Chose 15 images within 30 frames of the iniital one
-        image_indices = self.rng.randint(80, size=(30,)) - 40 + image_index
+        image_indices = self.rng.randint(60, size=(15,)) - 30 + image_index
         image_indices = np.minimum(
             np.maximum(image_indices, 0), frames.shape[0] - 1
         )

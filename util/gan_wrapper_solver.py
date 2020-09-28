@@ -32,8 +32,10 @@ class GAN_Wrapper_Solver(object):
                  size_D=64,
                  loss_D='ls',
                  no_gan_feature_loss=False,
-                 lr_step=10,
-                 lr_gamma=0.1,
+                 lr_step_D=10,
+                 lr_gamma_D=0.1,
+                 lr_step_G=10,
+                 lr_gamma_G=0.1,
                  log_depth=False,
                  init_discriminator_weights=True):
         """
@@ -57,8 +59,10 @@ class GAN_Wrapper_Solver(object):
         optim_d_args_merged.update(optim_d_args)
         self.optim_d_args = optim_d_args_merged
         self.optim_d = optim_d
-        self.lr_step = lr_step
-        self.lr_gamma = lr_gamma
+        self.lr_step_D = lr_step_D
+        self.lr_gamma_D = lr_gamma_D
+        self.lr_step_G = lr_step_G
+        self.lr_gamma_G = lr_gamma_G
         self.log_depth = log_depth
 
 
@@ -77,8 +81,8 @@ class GAN_Wrapper_Solver(object):
         )
 
         self.scheduler_D = torch.optim.lr_scheduler.StepLR(self.optimizer_D,
-                                                           step_size=self.lr_step,
-                                                           gamma=self.lr_gamma)
+                                                           step_size=self.lr_step_D,
+                                                           gamma=self.lr_gamma_D)
 
         self.nvs_solver = NVS_Solver(optim=optim_g,
                                      optim_args=optim_g_args,
@@ -190,8 +194,8 @@ class GAN_Wrapper_Solver(object):
         )
 
         scheduler_G = torch.optim.lr_scheduler.StepLR(optimizer_G,
-                                                      step_size=self.lr_step,
-                                                      gamma=self.lr_gamma)
+                                                      step_size=self.lr_step_G,
+                                                      gamma=self.lr_gamma_G)
 
         self._reset_histories()
         iter_per_epoch = len(train_loader)
